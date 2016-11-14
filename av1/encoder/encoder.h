@@ -45,6 +45,10 @@
 #include "aom/internal/aom_codec_internal.h"
 #include "aom_util/aom_thread.h"
 
+#ifdef CONFIG_XIPHRC
+#include "av1/encoder/ratectrl_xiph.h"
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -424,6 +428,9 @@ typedef struct AV1_COMP {
   int64_t first_time_stamp_ever;
 
   RATE_CONTROL rc;
+#ifdef CONFIG_XIPHRC
+  od_enc_ctx od_rc;
+#endif
   double framerate;
 
   // NOTE(zoeliu): Any inter frame allows maximum of REF_FRAMES inter

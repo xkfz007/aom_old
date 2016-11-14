@@ -2064,7 +2064,11 @@ AV1_COMP *av1_create_compressor(AV1EncoderConfig *oxcf,
   cpi->common.buffer_pool = pool;
 
   init_config(cpi, oxcf);
-  av1_rc_init(&cpi->oxcf, oxcf->pass, &cpi->rc);
+#if CONFIG_XIPHRC
+    od_enc_rc_init(&cpi->od_rc, cpi->oxcf.target_bandwidth);
+#else
+    av1_rc_init(&cpi->oxcf, oxcf->pass, &cpi->rc);
+#endif
 
   cm->current_video_frame = 0;
   cpi->partition_search_skippable_frame = 0;
