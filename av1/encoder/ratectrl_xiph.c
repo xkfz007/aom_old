@@ -37,6 +37,16 @@ static uint16_t OD_ROUGH_TAN_LOOKUP[18] = {
  7094,  8784, 11254, 15286, 23230, 46817
 };
 
+static int od_codedquantizer_to_quantizer(int q)
+{
+    return q;
+}
+
+static int od_quantizer_to_codedquantizer(int q)
+{
+    return q;
+}
+
 /*alpha is Q24 in the range [0,0.5).
   The return values is 5.12.*/
 static int od_warp_alpha(int alpha) {
@@ -576,8 +586,8 @@ static int od_rc_scale_drop(od_rc_state *rc, int frame_type, int nframes) {
   No side effects, may be called any number of times.
   Note that it ignores end-of-file conditions; one-pass planning *should*
    ignore end-of-file. */
-static int od_frame_type(daala_enc_ctx *enc, int64_t coding_frame_count,
-                         int *is_golden, int64_t *ip_count){
+int od_frame_type(daala_enc_ctx *enc, int64_t coding_frame_count, int *is_golden,
+                  int64_t *ip_count) {
   int frame_type;
   if (coding_frame_count == 0) {
     *is_golden = 1;

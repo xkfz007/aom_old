@@ -73,8 +73,6 @@ typedef struct od_rc_state od_rc_state;
    conversion (6.235 * 2^45) */
 #define OD_LOG_QUANTIZER_OFFSET_Q45 (0x0000C7851EB851ECLL)
 
-# define OD_N_CODED_QUANTIZERS (64)
-
 /* End of FIXME */
 
 /*A 2nd order low-pass Bessel follower.

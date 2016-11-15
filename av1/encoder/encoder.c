@@ -398,7 +398,9 @@ void av1_initialize_enc(void) {
     aom_scale_rtcd();
     av1_init_intra_predictors();
     av1_init_me_luts();
+#ifndef CONFIG_XIPHRC
     av1_rc_init_minq_luts();
+#endif
     av1_entropy_mv_init();
     av1_encode_token_init();
 #if CONFIG_EXT_INTER
@@ -782,7 +784,9 @@ void av1_alloc_compressor_data(AV1_COMP *cpi) {
 
 void av1_new_framerate(AV1_COMP *cpi, double framerate) {
   cpi->framerate = framerate < 0.1 ? 30 : framerate;
+#ifndef CONFIG_XIPHRC
   av1_rc_update_framerate(cpi);
+#endif
 }
 
 static void set_tile_info(AV1_COMP *cpi) {
@@ -3718,7 +3722,11 @@ static void set_size_dependent_vars(AV1_COMP *cpi, int *q, int *bottom_index,
   av1_set_speed_features_framesize_dependent(cpi);
 
   // Decide q and q bounds.
+#ifndef CONFIG_XIPHRC
   *q = av1_rc_pick_q_and_bounds(cpi, bottom_index, top_index);
+#else
+
+#endif
 
   if (!frame_is_intra_only(cm)) {
     av1_set_high_precision_mv(cpi, (*q) < HIGH_PRECISION_MV_QTHRESH);
@@ -4142,6 +4150,7 @@ static void encode_with_recode_loop(AV1_COMP *cpi, size_t *size,
         // Update correction factor & compute new Q to try...
 
         // Frame is too large
+#ifndef CONFIG_XIPHRC
         if (rc->projected_frame_size > rc->this_frame_target) {
           // Special case if the projected size is > the max allowed.
           if (rc->projected_frame_size >= rc->max_frame_bandwidth)
@@ -4200,6 +4209,7 @@ static void encode_with_recode_loop(AV1_COMP *cpi, size_t *size,
 
           undershoot_seen = 1;
         }
+#endif
 
         // Clamp Q to upper and lower limits:
         q = clamp(q, q_low, q_high);
@@ -4545,7 +4555,13 @@ static void encode_frame_to_data_rate(AV1_COMP *cpi, size_t *size,
     // to do post-encoding update accordingly.
     if (cpi->rc.is_src_frame_alt_ref) {
       av1_set_target_rate(cpi);
+#ifdef CONFIG_XIPHRC
+      od_enc_rc_update_state(&cpi->od_rc, *size << 3,
+                             cpi->frame_flags & FRAMEFLAGS_GOLDEN,
+                             cm->frame_type, cpi->droppable);
+#else
       av1_rc_postencode_update(cpi, *size);
+#endif
     }
 
     cm->last_width = cm->width;
@@ -4602,8 +4618,14 @@ static void encode_frame_to_data_rate(AV1_COMP *cpi, size_t *size,
   // Never drop on key frame.
   if (oxcf->pass == 0 && oxcf->rc_mode == AOM_CBR &&
       cm->frame_type != KEY_FRAME) {
+#ifdef CONFIG_XIPHRC
+    if (od_enc_rc_update_state(&cpi->od_rc, *size << 3,
+                               cpi->frame_flags & FRAMEFLAGS_GOLDEN,
+                               cm->frame_type, cpi->droppable)) {
+#else
     if (av1_rc_drop_frame(cpi)) {
       av1_rc_postencode_update_drop_frame(cpi);
+#endif
       ++cm->current_video_frame;
       return;
     }
@@ -4755,7 +4777,9 @@ static void encode_frame_to_data_rate(AV1_COMP *cpi, size_t *size,
 
   cm->last_frame_type = cm->frame_type;
 
+#ifndef CONFIG_XIPHRC
   av1_rc_postencode_update(cpi, *size);
+#endif
 
 #if 0
   output_frame_level_debug_stats(cpi);
@@ -4801,11 +4825,21 @@ static void encode_frame_to_data_rate(AV1_COMP *cpi, size_t *size,
 
 static void Pass0Encode(AV1_COMP *cpi, size_t *size, uint8_t *dest,
                         unsigned int *frame_flags) {
+#if CONFIG_XIPHRC
+  int64_t ip_count;
+  int frame_type, is_golden;
+  /* Note: change ip_frame_count to the global frame counter */
+  frame_type = od_frame_type(&cpi->od_rc, cpi->od_rc.ip_frame_count, &is_golden, &ip_count);
+  cpi->common.frame_type = frame_type;
+  od_enc_rc_select_quantizers_and_lambdas(&cpi->od_rc, cpi->refresh_golden_frame,
+                                          cpi->common.frame_type);
+#else
   if (cpi->oxcf.rc_mode == AOM_CBR) {
     av1_rc_get_one_pass_cbr_params(cpi);
   } else {
     av1_rc_get_one_pass_vbr_params(cpi);
   }
+#endif
   encode_frame_to_data_rate(cpi, size, dest, frame_flags);
 }
 
@@ -5231,7 +5265,9 @@ int av1_get_compressed_data(AV1_COMP *cpi, unsigned int *frame_flags,
 
     // We need to update the gf_group for show_existing overlay frame
     if (cpi->rc.is_src_frame_alt_ref) {
+#ifndef CONFIG_XIPHRC
       av1_rc_get_second_pass_params(cpi);
+#endif
     }
 
     Pass2Encode(cpi, size, dest, frame_flags);
@@ -5391,7 +5427,9 @@ int av1_get_compressed_data(AV1_COMP *cpi, unsigned int *frame_flags,
   cpi->frame_flags = *frame_flags;
 
   if (oxcf->pass == 2) {
+#ifndef CONFIG_XIPHRC
     av1_rc_get_second_pass_params(cpi);
+#endif
   } else if (oxcf->pass == 1) {
     set_frame_size(cpi);
   }
