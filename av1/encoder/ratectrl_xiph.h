@@ -20,7 +20,7 @@
 int od_enc_rc_init(od_enc_ctx *enc, long bitrate);
 
 void od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
- int is_golden_frame, int frame_type);
+ int is_golden_frame, int frame_type, int *bottom_idx, int *top_idx);
 
 /* Returns 1 if the frame should be dropped */
 int od_enc_rc_update_state(od_enc_ctx *enc, long bits,

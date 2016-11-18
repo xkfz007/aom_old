@@ -2067,9 +2067,11 @@ AV1_COMP *av1_create_compressor(AV1EncoderConfig *oxcf,
   cpi->resize_buffer_underflow = 0;
   cpi->common.buffer_pool = pool;
 
+    printf("INIT START = %i!\n", cpi->rc.base_frame_target);
+
   init_config(cpi, oxcf);
-#if CONFIG_XIPHRC
-    od_enc_rc_init(&cpi->od_rc, cpi->oxcf.target_bandwidth);
+#ifdef CONFIG_XIPHRC
+    od_enc_rc_init(&cpi->od_rc, 100000);
 #else
     av1_rc_init(&cpi->oxcf, oxcf->pass, &cpi->rc);
 #endif
@@ -3725,7 +3727,9 @@ static void set_size_dependent_vars(AV1_COMP *cpi, int *q, int *bottom_index,
 #ifndef CONFIG_XIPHRC
   *q = av1_rc_pick_q_and_bounds(cpi, bottom_index, top_index);
 #else
-
+  od_enc_rc_select_quantizers_and_lambdas(&cpi->od_rc, cpi->refresh_golden_frame,
+                                          cpi->common.frame_type,
+                                          bottom_index, top_index);
 #endif
 
   if (!frame_is_intra_only(cm)) {
@@ -4831,8 +4835,7 @@ static void Pass0Encode(AV1_COMP *cpi, size_t *size, uint8_t *dest,
   /* Note: change ip_frame_count to the global frame counter */
   frame_type = od_frame_type(&cpi->od_rc, cpi->od_rc.ip_frame_count, &is_golden, &ip_count);
   cpi->common.frame_type = frame_type;
-  od_enc_rc_select_quantizers_and_lambdas(&cpi->od_rc, cpi->refresh_golden_frame,
-                                          cpi->common.frame_type);
+  cpi->frame_flags &= FRAMEFLAGS_GOLDEN;
 #else
   if (cpi->oxcf.rc_mode == AOM_CBR) {
     av1_rc_get_one_pass_cbr_params(cpi);

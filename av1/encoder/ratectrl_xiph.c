@@ -13,6 +13,7 @@
 # include "config.h"
 #endif
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "ratectrl_xiph.h"
@@ -525,6 +526,7 @@ int od_enc_rc_init(od_enc_ctx *enc, long bitrate) {
    enc->state.info.timebase_denominator <= 0)
     return OD_EINVAL;
   rc = &enc->rc;
+  printf("Bitrate init = %l\n", bitrate);
   if (rc->target_bitrate > 0) {
     /*State has already been initialized; rather than reinitialize,
       adjust the buffering for the new target rate. */
@@ -725,7 +727,7 @@ static int quality_to_quantizer(int quality) {
 }
 
 void od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
- int is_golden_frame, int frame_type) {
+ int is_golden_frame, int frame_type, int *bottom_idx, int *top_idx) {
   int frame_subtype;
   int lossy_quantizer_min;
   int lossy_quantizer_max;
@@ -748,7 +750,7 @@ void od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
     OD_UNUSED(closed_form_type);
     OD_ASSERT(closed_form_type == frame_type);
     OD_ASSERT(closed_form_ip_count == enc->ip_frame_count);
-    OD_ASSERT(closed_form_golden == is_golden_frame);
+    //OD_ASSERT(closed_form_golden == is_golden_frame);
   }
   /*Quantizer selection sticks to the codable, lossy portion of the quantizer
     range.*/
@@ -1085,6 +1087,9 @@ void od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
   /*The deringing filter uses yet another adjusted lambda*/
   enc->dering_lambda = 0.67*OD_PVQ_LAMBDA*
    enc->target_quantizer*enc->target_quantizer;
+  *bottom_idx = lossy_quantizer_min;
+  *top_idx = lossy_quantizer_max;
+  printf("Qrange = %i %i\n", lossy_quantizer_min, lossy_quantizer_max);
 }
 
 int od_enc_rc_update_state(od_enc_ctx *enc, long bits,
