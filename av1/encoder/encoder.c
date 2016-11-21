@@ -2067,11 +2067,15 @@ AV1_COMP *av1_create_compressor(AV1EncoderConfig *oxcf,
   cpi->resize_buffer_underflow = 0;
   cpi->common.buffer_pool = pool;
 
-    printf("INIT START = %i!\n", cpi->rc.base_frame_target);
-
   init_config(cpi, oxcf);
 #ifdef CONFIG_XIPHRC
-    od_enc_rc_init(&cpi->od_rc, 100000);
+    cpi->od_rc.state.info.framerate = cpi->framerate;
+    cpi->od_rc.state.frame_width = cm->render_width;
+    cpi->od_rc.state.frame_height = cm->render_height;
+    cpi->od_rc.input_queue.keyframe_rate = 18;
+    cpi->od_rc.state.info.keyframe_rate = 18;
+    cpi->od_rc.frame_delay = 1;
+    od_enc_rc_init(&cpi->od_rc, oxcf->target_bandwidth);
 #else
     av1_rc_init(&cpi->oxcf, oxcf->pass, &cpi->rc);
 #endif
@@ -3727,9 +3731,9 @@ static void set_size_dependent_vars(AV1_COMP *cpi, int *q, int *bottom_index,
 #ifndef CONFIG_XIPHRC
   *q = av1_rc_pick_q_and_bounds(cpi, bottom_index, top_index);
 #else
-  od_enc_rc_select_quantizers_and_lambdas(&cpi->od_rc, cpi->refresh_golden_frame,
-                                          cpi->common.frame_type,
-                                          bottom_index, top_index);
+  *q = od_enc_rc_select_quantizers_and_lambdas(&cpi->od_rc, cpi->refresh_golden_frame,
+                                               cpi->common.frame_type,
+                                               bottom_index, top_index);
 #endif
 
   if (!frame_is_intra_only(cm)) {
@@ -4560,9 +4564,10 @@ static void encode_frame_to_data_rate(AV1_COMP *cpi, size_t *size,
     if (cpi->rc.is_src_frame_alt_ref) {
       av1_set_target_rate(cpi);
 #ifdef CONFIG_XIPHRC
+      int frame_type = cm->frame_type == INTER_FRAME ? OD_P_FRAME : OD_I_FRAME;
       od_enc_rc_update_state(&cpi->od_rc, *size << 3,
                              cpi->frame_flags & FRAMEFLAGS_GOLDEN,
-                             cm->frame_type, cpi->droppable);
+                             frame_type, cpi->droppable);
 #else
       av1_rc_postencode_update(cpi, *size);
 #endif
@@ -4623,9 +4628,7 @@ static void encode_frame_to_data_rate(AV1_COMP *cpi, size_t *size,
   if (oxcf->pass == 0 && oxcf->rc_mode == AOM_CBR &&
       cm->frame_type != KEY_FRAME) {
 #ifdef CONFIG_XIPHRC
-    if (od_enc_rc_update_state(&cpi->od_rc, *size << 3,
-                               cpi->frame_flags & FRAMEFLAGS_GOLDEN,
-                               cm->frame_type, cpi->droppable)) {
+    if (0) {
 #else
     if (av1_rc_drop_frame(cpi)) {
       av1_rc_postencode_update_drop_frame(cpi);
@@ -4781,7 +4784,15 @@ static void encode_frame_to_data_rate(AV1_COMP *cpi, size_t *size,
 
   cm->last_frame_type = cm->frame_type;
 
-#ifndef CONFIG_XIPHRC
+#ifdef CONFIG_XIPHRC
+    int frame_type = cm->frame_type == INTER_FRAME ? OD_P_FRAME : OD_I_FRAME;
+    od_enc_rc_update_state(&cpi->od_rc, *size << 3,
+                           cpi->refresh_golden_frame,
+                           frame_type, 0);
+    cpi->od_rc.ip_frame_count++;
+    cpi->od_rc.curr_coding_order++;
+    fprintf(stderr, "\n");
+#else
   av1_rc_postencode_update(cpi, *size);
 #endif
 
@@ -4827,15 +4838,25 @@ static void encode_frame_to_data_rate(AV1_COMP *cpi, size_t *size,
     cm->prev_frame = cm->cur_frame;
 }
 
+int trig = 0;
+
 static void Pass0Encode(AV1_COMP *cpi, size_t *size, uint8_t *dest,
                         unsigned int *frame_flags) {
 #if CONFIG_XIPHRC
   int64_t ip_count;
   int frame_type, is_golden;
-  /* Note: change ip_frame_count to the global frame counter */
+
   frame_type = od_frame_type(&cpi->od_rc, cpi->od_rc.ip_frame_count, &is_golden, &ip_count);
+
+  if (frame_type == OD_I_FRAME)
+    frame_type = KEY_FRAME;
+  else if (frame_type == OD_P_FRAME)
+    frame_type = INTER_FRAME;
+
+  cpi->refresh_golden_frame = is_golden;
   cpi->common.frame_type = frame_type;
-  cpi->frame_flags &= FRAMEFLAGS_GOLDEN;
+  if (is_golden)
+    cpi->frame_flags &= FRAMEFLAGS_GOLDEN;
 #else
   if (cpi->oxcf.rc_mode == AOM_CBR) {
     av1_rc_get_one_pass_cbr_params(cpi);

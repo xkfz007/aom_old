@@ -57,8 +57,7 @@ struct daala_info {
   int32_t pic_height;
   uint32_t pixel_aspect_numerator;
   uint32_t pixel_aspect_denominator;
-  uint32_t timebase_numerator;
-  uint32_t timebase_denominator;
+  double framerate;
   uint32_t frame_duration;
   /**The amount to shift to extract the last keyframe number from the granule
    *  position. */

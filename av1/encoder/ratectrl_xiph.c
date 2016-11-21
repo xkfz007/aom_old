@@ -366,9 +366,7 @@ static int64_t od_iir_bessel2_update(od_iir_bessel2 *f, int32_t x) {
 static void od_enc_rc_reset(od_enc_ctx *enc) {
   int64_t npixels;
   int64_t ibpp;
-  enc->rc.bits_per_frame = enc->rc.target_bitrate*
-   (int64_t)enc->state.info.timebase_denominator/
-   enc->state.info.timebase_numerator;
+  enc->rc.bits_per_frame = enc->rc.target_bitrate/enc->state.info.framerate;
   /*Insane framerates or frame sizes mean insane bitrates.
     Let's not get carried away.*/
   if(enc->rc.bits_per_frame > 0x400000000000LL) {
@@ -480,9 +478,7 @@ int od_enc_rc_resize(od_enc_ctx *enc) {
     int idt;
     /*Otherwise, update the bounds on the buffer, but not the current
        fullness.*/
-    enc->rc.bits_per_frame = enc->rc.target_bitrate*
-     (int64_t)enc->state.info.timebase_denominator/
-     enc->state.info.timebase_numerator;
+    enc->rc.bits_per_frame = enc->rc.target_bitrate/enc->state.info.framerate;
     /*Insane framerates or frame sizes mean insane bitrates.
       Let's not get carried away.*/
     if (enc->rc.bits_per_frame > 0x400000000000LL) {
@@ -522,11 +518,10 @@ int od_enc_rc_resize(od_enc_ctx *enc) {
 
 int od_enc_rc_init(od_enc_ctx *enc, long bitrate) {
   od_rc_state *rc;
-  if(enc->state.info.timebase_numerator <= 0 ||
-   enc->state.info.timebase_denominator <= 0)
+  if(enc->state.info.framerate <= 0)
     return OD_EINVAL;
   rc = &enc->rc;
-  printf("Bitrate init = %l\n", bitrate);
+  printf("RC_INIT   = %li %f\n", bitrate, enc->state.info.framerate);
   if (rc->target_bitrate > 0) {
     /*State has already been initialized; rather than reinitialize,
       adjust the buffering for the new target rate. */
@@ -627,6 +622,7 @@ int od_frame_type(daala_enc_ctx *enc, int64_t coding_frame_count, int *is_golden
   *is_golden = *ip_count %
    (OD_GOLDEN_FRAME_INTERVAL/(enc->b_frames + 1)) == 0 &&
    frame_type != OD_B_FRAME ? 1 : frame_type == OD_I_FRAME;
+  //fprintf(stderr, "Frametype = %i\n", frame_type);
   return frame_type;
 }
 
@@ -726,7 +722,7 @@ static int quality_to_quantizer(int quality) {
    (1 << OD_COEFF_SHIFT >> 1);
 }
 
-void od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
+int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
  int is_golden_frame, int frame_type, int *bottom_idx, int *top_idx) {
   int frame_subtype;
   int lossy_quantizer_min;
@@ -747,10 +743,11 @@ void od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
     closed_form_type =
      od_frame_type(enc, enc->curr_coding_order, &closed_form_golden,
      &closed_form_ip_count);
+    fprintf(stderr, "RC_CLOSED = Type: (%i vs %i), Gold: (%i vs %i), Count: (%li vs %li)\n", frame_type, closed_form_type, is_golden_frame, closed_form_golden, enc->ip_frame_count, closed_form_ip_count);
     OD_UNUSED(closed_form_type);
     OD_ASSERT(closed_form_type == frame_type);
     OD_ASSERT(closed_form_ip_count == enc->ip_frame_count);
-    //OD_ASSERT(closed_form_golden == is_golden_frame);
+    OD_ASSERT(closed_form_golden == is_golden_frame);
   }
   /*Quantizer selection sticks to the codable, lossy portion of the quantizer
     range.*/
@@ -1089,7 +1086,8 @@ void od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
    enc->target_quantizer*enc->target_quantizer;
   *bottom_idx = lossy_quantizer_min;
   *top_idx = lossy_quantizer_max;
-  printf("Qrange = %i %i\n", lossy_quantizer_min, lossy_quantizer_max);
+  printf("RC_QUANT  = %i <- Q:%i T:%i C:%i B:%i -> %i\n", lossy_quantizer_min, enc->state.quantizer, enc->target_quantizer, enc->state.coded_quantizer, enc->rc.base_quantizer, lossy_quantizer_max);
+  return enc->target_quantizer;
 }
 
 int od_enc_rc_update_state(od_enc_ctx *enc, long bits,
@@ -1198,6 +1196,7 @@ int od_enc_rc_update_state(od_enc_ctx *enc, long bits,
     /*Adjust the bias for the real bits we've used.*/
     enc->rc.rate_bias -= bits;
   }
+  fprintf(stderr, "RC_UPDATE = %li %i %li %li %li\n", bits, dropped, enc->rc.log_scale[frame_type], enc->rc.reservoir_fullness, enc->rc.rate_bias);
   return dropped;
 }
 
