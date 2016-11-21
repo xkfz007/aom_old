@@ -521,7 +521,7 @@ int od_enc_rc_init(od_enc_ctx *enc, long bitrate) {
   if(enc->state.info.framerate <= 0)
     return OD_EINVAL;
   rc = &enc->rc;
-  printf("RC_INIT   = %li %i %f\n", bitrate, enc->quality, enc->state.info.framerate);
+  //fprintf(stderr, "RC_INIT   = %li %i %f\n", bitrate, enc->quality, enc->state.info.framerate);
   if (rc->target_bitrate > 0) {
     /*State has already been initialized; rather than reinitialize,
       adjust the buffering for the new target rate. */
@@ -743,7 +743,7 @@ int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
     closed_form_type =
      od_frame_type(enc, enc->curr_coding_order, &closed_form_golden,
      &closed_form_ip_count);
-    fprintf(stderr, "RC_CLOSED = Type: (%i vs %i), Gold: (%i vs %i), Count: (%li vs %li)\n", frame_type, closed_form_type, is_golden_frame, closed_form_golden, enc->ip_frame_count, closed_form_ip_count);
+    //fprintf(stderr, "RC_CLOSED = Type: (%i vs %i), Gold: (%i vs %i), Count: (%li vs %li)\n", frame_type, closed_form_type, is_golden_frame, closed_form_golden, enc->ip_frame_count, closed_form_ip_count);
     OD_UNUSED(closed_form_type);
     OD_ASSERT(closed_form_type == frame_type);
     OD_ASSERT(closed_form_ip_count == enc->ip_frame_count);
@@ -1086,7 +1086,7 @@ int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
    enc->target_quantizer*enc->target_quantizer;
   *bottom_idx = lossy_quantizer_min;
   *top_idx = lossy_quantizer_max;
-  printf("RC_QUANT  = %i <- Q:%i T:%i C:%i B:%i -> %i\n", lossy_quantizer_min, enc->state.quantizer, enc->target_quantizer, enc->state.coded_quantizer, enc->rc.base_quantizer, lossy_quantizer_max);
+  //fprintf(stderr, "RC_QUANT  = %i <- Q:%i T:%i C:%i B:%i -> %i\n", lossy_quantizer_min, enc->state.quantizer, enc->target_quantizer, enc->state.coded_quantizer, enc->rc.base_quantizer, lossy_quantizer_max);
   return enc->target_quantizer;
 }
 
@@ -1196,7 +1196,7 @@ int od_enc_rc_update_state(od_enc_ctx *enc, long bits,
     /*Adjust the bias for the real bits we've used.*/
     enc->rc.rate_bias -= bits;
   }
-  fprintf(stderr, "RC_UPDATE = %li %i %li %li %li\n", bits, dropped, enc->rc.log_scale[frame_type], enc->rc.reservoir_fullness, enc->rc.rate_bias);
+  //fprintf(stderr, "RC_UPDATE = %li %i %li %li %li\n", bits, dropped, enc->rc.log_scale[frame_type], enc->rc.reservoir_fullness, enc->rc.rate_bias);
   return dropped;
 }
 

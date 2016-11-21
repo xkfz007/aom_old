@@ -4812,7 +4812,7 @@ static void encode_frame_to_data_rate(AV1_COMP *cpi, size_t *size,
   if (frame_type == OD_I_FRAME || frame_type == OD_P_FRAME)
     cpi->od_rc.ip_frame_count++;
   cpi->od_rc.curr_coding_order++;
-  fprintf(stderr, "\n");
+  //fprintf(stderr, "\n");
 #else
   av1_rc_postencode_update(cpi, *size);
 #endif
