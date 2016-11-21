@@ -521,7 +521,7 @@ int od_enc_rc_init(od_enc_ctx *enc, long bitrate) {
   if(enc->state.info.framerate <= 0)
     return OD_EINVAL;
   rc = &enc->rc;
-  printf("RC_INIT   = %li %f\n", bitrate, enc->state.info.framerate);
+  printf("RC_INIT   = %li %i %f\n", bitrate, enc->quality, enc->state.info.framerate);
   if (rc->target_bitrate > 0) {
     /*State has already been initialized; rather than reinitialize,
       adjust the buffering for the new target rate. */
@@ -620,7 +620,7 @@ int od_frame_type(daala_enc_ctx *enc, int64_t coding_frame_count, int *is_golden
     }
   }
   *is_golden = *ip_count %
-   (OD_GOLDEN_FRAME_INTERVAL/(enc->b_frames + 1)) == 0 &&
+   (enc->input_queue.goldenframe_rate/(enc->b_frames + 1)) == 0 &&
    frame_type != OD_B_FRAME ? 1 : frame_type == OD_I_FRAME;
   //fprintf(stderr, "Frametype = %i\n", frame_type);
   return frame_type;

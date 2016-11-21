@@ -49,9 +49,6 @@ typedef struct od_rc_state od_rc_state;
 # define OD_DQP_P (0)
 # define OD_DQP_B (1)
 
-/*Rougly how often do golden frames pop.*/
-#define OD_GOLDEN_FRAME_INTERVAL 10
-
 /*OD_QUALITY_SHIFT specifies the number of fractional bits in a
    passed in 'quality' parameter.
   For example, an OD_QUALITY_SHIFT of (4) specifies the quality parameter is
@@ -101,6 +98,7 @@ struct od_input_queue {
 
   /* Input queue parameters */
   int keyframe_rate;
+  int goldenframe_rate;
   int frame_delay;
 
   /* Input queue state */
