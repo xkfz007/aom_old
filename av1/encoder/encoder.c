@@ -3731,12 +3731,21 @@ static void set_size_dependent_vars(AV1_COMP *cpi, int *q, int *bottom_index,
   av1_set_speed_features_framesize_dependent(cpi);
 
   // Decide q and q bounds.
-#ifndef CONFIG_XIPHRC
-  *q = av1_rc_pick_q_and_bounds(cpi, bottom_index, top_index);
-#else
+#ifdef CONFIG_XIPHRC
+  int frame_type;
+  if (cm->frame_type == KEY_FRAME)
+    frame_type = OD_I_FRAME;
+  else if (cm->frame_type == INTER_FRAME)
+    frame_type = OD_P_FRAME;
+  else if (cm->frame_type == ALTREF_FRAME)
+    abort();
+  else
+    abort();
   *q = od_enc_rc_select_quantizers_and_lambdas(&cpi->od_rc, cpi->refresh_golden_frame,
-                                               cpi->common.frame_type,
+                                               frame_type,
                                                bottom_index, top_index);
+#else
+  *q = av1_rc_pick_q_and_bounds(cpi, bottom_index, top_index);
 #endif
 
   if (!frame_is_intra_only(cm)) {
@@ -4788,11 +4797,20 @@ static void encode_frame_to_data_rate(AV1_COMP *cpi, size_t *size,
   cm->last_frame_type = cm->frame_type;
 
 #ifdef CONFIG_XIPHRC
-  int frame_type = cm->frame_type == INTER_FRAME ? OD_P_FRAME : OD_I_FRAME;
+  int frame_type;
+  if (cm->frame_type == KEY_FRAME)
+    frame_type = OD_I_FRAME;
+  else if (cm->frame_type == INTER_FRAME)
+    frame_type = OD_P_FRAME;
+  else if (cm->frame_type == ALTREF_FRAME)
+    abort();
+  else
+    abort();
   od_enc_rc_update_state(&cpi->od_rc, *size << 3,
                          cpi->refresh_golden_frame,
                          frame_type, 0);
-  cpi->od_rc.ip_frame_count++;
+  if (frame_type == OD_I_FRAME || frame_type == OD_P_FRAME)
+    cpi->od_rc.ip_frame_count++;
   cpi->od_rc.curr_coding_order++;
   fprintf(stderr, "\n");
 #else
@@ -4849,12 +4867,20 @@ static void Pass0Encode(AV1_COMP *cpi, size_t *size, uint8_t *dest,
   int64_t ip_count;
   int frame_type, is_golden;
 
-  frame_type = od_frame_type(&cpi->od_rc, cpi->od_rc.ip_frame_count, &is_golden, &ip_count);
+  frame_type = od_frame_type(&cpi->od_rc, cpi->od_rc.curr_coding_order, &is_golden, &ip_count);
 
-  if (frame_type == OD_I_FRAME)
+  if (frame_type == OD_I_FRAME) {
     frame_type = KEY_FRAME;
-  else if (frame_type == OD_P_FRAME)
+    cpi->frame_flags &= FRAMEFLAGS_KEY;
+  } else if (frame_type == OD_P_FRAME) {
     frame_type = INTER_FRAME;
+  } else if (frame_type == OD_B_FRAME) {
+    //frame_type = BWDREF_FRAME;
+    //cpi->frame_flags &= FRAMEFLAGS_BWDREF;
+    abort();
+  } else {
+    abort();
+  }
 
   cpi->refresh_golden_frame = is_golden;
   cpi->common.frame_type = frame_type;
