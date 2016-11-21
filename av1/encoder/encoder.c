@@ -2069,18 +2069,18 @@ AV1_COMP *av1_create_compressor(AV1EncoderConfig *oxcf,
 
   init_config(cpi, oxcf);
 #ifdef CONFIG_XIPHRC
-    cpi->od_rc.state.info.framerate = cpi->framerate;
-    cpi->od_rc.state.frame_width = cm->render_width;
-    cpi->od_rc.state.frame_height = cm->render_height;
-    cpi->od_rc.input_queue.keyframe_rate = 30;
-    cpi->od_rc.state.info.keyframe_rate = 30;
-    cpi->od_rc.input_queue.goldenframe_rate = 15;
-    cpi->od_rc.frame_delay = 1;
-    if (oxcf->target_bandwidth <= 0)
-      cpi->od_rc.quality = oxcf->cq_level;
-    od_enc_rc_init(&cpi->od_rc, oxcf->target_bandwidth);
+  cpi->od_rc.state.info.framerate = cpi->framerate;
+  cpi->od_rc.state.frame_width = cm->render_width;
+  cpi->od_rc.state.frame_height = cm->render_height;
+  cpi->od_rc.input_queue.keyframe_rate = 30;
+  cpi->od_rc.state.info.keyframe_rate = 30;
+  cpi->od_rc.input_queue.goldenframe_rate = 15;
+  cpi->od_rc.frame_delay = 1;
+  if (oxcf->target_bandwidth <= 0)
+    cpi->od_rc.quality = oxcf->cq_level;
+  od_enc_rc_init(&cpi->od_rc, oxcf->target_bandwidth);
 #else
-    av1_rc_init(&cpi->oxcf, oxcf->pass, &cpi->rc);
+  av1_rc_init(&cpi->oxcf, oxcf->pass, &cpi->rc);
 #endif
 
   cm->current_video_frame = 0;
@@ -4788,13 +4788,13 @@ static void encode_frame_to_data_rate(AV1_COMP *cpi, size_t *size,
   cm->last_frame_type = cm->frame_type;
 
 #ifdef CONFIG_XIPHRC
-    int frame_type = cm->frame_type == INTER_FRAME ? OD_P_FRAME : OD_I_FRAME;
-    od_enc_rc_update_state(&cpi->od_rc, *size << 3,
-                           cpi->refresh_golden_frame,
-                           frame_type, 0);
-    cpi->od_rc.ip_frame_count++;
-    cpi->od_rc.curr_coding_order++;
-    fprintf(stderr, "\n");
+  int frame_type = cm->frame_type == INTER_FRAME ? OD_P_FRAME : OD_I_FRAME;
+  od_enc_rc_update_state(&cpi->od_rc, *size << 3,
+                         cpi->refresh_golden_frame,
+                         frame_type, 0);
+  cpi->od_rc.ip_frame_count++;
+  cpi->od_rc.curr_coding_order++;
+  fprintf(stderr, "\n");
 #else
   av1_rc_postencode_update(cpi, *size);
 #endif
