@@ -2076,9 +2076,8 @@ AV1_COMP *av1_create_compressor(AV1EncoderConfig *oxcf,
   cpi->od_rc.state.info.keyframe_rate = 30;
   cpi->od_rc.input_queue.goldenframe_rate = 15;
   cpi->od_rc.frame_delay = 1;
-  if (oxcf->target_bandwidth <= 0)
-    cpi->od_rc.quality = oxcf->cq_level;
-  od_enc_rc_init(&cpi->od_rc, oxcf->target_bandwidth);
+  cpi->od_rc.quality = oxcf->cq_level;
+  od_enc_rc_init(&cpi->od_rc, cpi->oxcf.rc_mode == AOM_CQ ? -1 : oxcf->target_bandwidth);
 #else
   av1_rc_init(&cpi->oxcf, oxcf->pass, &cpi->rc);
 #endif
@@ -4867,6 +4866,8 @@ static void Pass0Encode(AV1_COMP *cpi, size_t *size, uint8_t *dest,
   int64_t ip_count;
   int frame_type, is_golden;
 
+  /* Not updated during init so update it here */
+  cpi->od_rc.quality = cpi->oxcf.cq_level;
   frame_type = od_frame_type(&cpi->od_rc, cpi->od_rc.curr_coding_order, &is_golden, &ip_count);
 
   if (frame_type == OD_I_FRAME) {
