@@ -1081,7 +1081,7 @@ int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
   *bottom_idx = lossy_quantizer_min;
   *top_idx = lossy_quantizer_max;
   //fprintf(stderr, "RC_QUANT  = %i <- Q:%i T:%i C:%i B:%i -> %i\n", lossy_quantizer_min, enc->state.quantizer, enc->target_quantizer, enc->state.coded_quantizer, enc->rc.base_quantizer, lossy_quantizer_max);
-  return enc->target_quantizer;
+  return enc->state.quantizer;
 }
 
 int od_enc_rc_update_state(od_enc_ctx *enc, long bits,
