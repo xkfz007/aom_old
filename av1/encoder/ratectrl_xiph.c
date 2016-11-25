@@ -713,13 +713,7 @@ static int frame_type_count(od_enc_ctx *enc, int nframes[OD_FRAME_NSUBTYPES]) {
 }
 
 static int quality_to_quantizer(int quality) {
-  /*A quality of -1 indicates the value is unset.
-    A quality of 0 indicates a request for lossless.
-    Above zero, there's a simple mapping from quality to baseline quantizer to
-    produce a relatively smooth rd curve.*/
-  return quality <= 0 ? quality :
-   (quality << OD_COEFF_SHIFT >> OD_QUALITY_SHIFT) +
-   (1 << OD_COEFF_SHIFT >> 1);
+  return quality;
 }
 
 int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
