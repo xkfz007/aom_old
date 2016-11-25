@@ -2077,7 +2077,7 @@ AV1_COMP *av1_create_compressor(AV1EncoderConfig *oxcf,
   cpi->od_rc.input_queue.goldenframe_rate = 15;
   cpi->od_rc.frame_delay = 1;
   cpi->od_rc.quality = oxcf->cq_level;
-  od_enc_rc_init(&cpi->od_rc, cpi->oxcf.rc_mode == AOM_CQ ? -1 : oxcf->target_bandwidth);
+  od_enc_rc_init(&cpi->od_rc, cpi->oxcf.rc_mode == AOM_Q ? -1 : oxcf->target_bandwidth);
 #else
   av1_rc_init(&cpi->oxcf, oxcf->pass, &cpi->rc);
 #endif
