@@ -713,7 +713,7 @@ static int frame_type_count(od_enc_ctx *enc, int nframes[OD_FRAME_NSUBTYPES]) {
 }
 
 static int quality_to_quantizer(int quality) {
-  return quality <= 0 ? quality : (quality << 4 >> 4) - (1 << 5 >> 1);
+  return (quality << OD_COEFF_SHIFT >> OD_QUALITY_SHIFT) - (3 << OD_COEFF_SHIFT >> 1) - 2;
 }
 
 int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
