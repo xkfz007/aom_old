@@ -713,7 +713,7 @@ static int frame_type_count(od_enc_ctx *enc, int nframes[OD_FRAME_NSUBTYPES]) {
 }
 
 static int quality_to_quantizer(int quality) {
-  return (quality << OD_COEFF_SHIFT >> OD_QUALITY_SHIFT) - (3 << OD_COEFF_SHIFT >> 1) - 2;
+  return (quality << OD_COEFF_SHIFT >> OD_QUALITY_SHIFT) - (quality >> 3) - 3;
 }
 
 int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
@@ -786,6 +786,12 @@ int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
       else {
         enc->rc.base_quantizer = quality_to_quantizer(enc->quality);
       }
+
+      if (!is_golden_frame) {
+        int dist_to_golden = enc->input_queue.goldenframe_rate - (enc->ip_frame_count % enc->input_queue.goldenframe_rate);
+        enc->rc.base_quantizer -= dist_to_golden;
+      }
+
       /*As originally written, qp modulation is applied to the coded quantizer.
         Because we now have and use a more precise target quantizer for various
         calculation, that needs to be modulated as well.
