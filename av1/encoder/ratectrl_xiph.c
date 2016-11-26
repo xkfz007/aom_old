@@ -788,7 +788,7 @@ int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
       }
 
       if (!is_golden_frame) {
-        int dist_to_golden = enc->input_queue.goldenframe_rate - (enc->ip_frame_count % enc->input_queue.goldenframe_rate);
+        int dist_to_golden = enc->ip_frame_count % enc->input_queue.goldenframe_rate;
         enc->rc.base_quantizer -= dist_to_golden;
       }
 
