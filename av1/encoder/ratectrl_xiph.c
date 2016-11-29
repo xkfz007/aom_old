@@ -712,8 +712,26 @@ static int frame_type_count(od_enc_ctx *enc, int nframes[OD_FRAME_NSUBTYPES]) {
   return reservoir_frames;
 }
 
+
+
+#define OD_LOG2_INSHIFT 15
+#define OD_LOG2_OUTSHIFT 15
+#define OD_LOG2_INSCALE_1 (1./(1 << OD_LOG2_INSHIFT))
+#define OD_LOG2_OUTSCALE (1 << OD_LOG2_OUTSHIFT)
+static int16_t od_log2(int16_t x)
+{
+  return x + OD_MULT16_16_Q15(x, (14482 + OD_MULT16_16_Q15(x, (-23234
+   + OD_MULT16_16_Q15(x, (13643 + OD_MULT16_16_Q15(x, (-6403
+   + OD_MULT16_16_Q15(x, 1515)))))))));
+}
+
+
+
 static int quality_to_quantizer(int quality) {
-  return (quality << OD_COEFF_SHIFT >> OD_QUALITY_SHIFT) - (quality >> 3) - 3;
+  if (quality < 96) /* Linear region for low quantizers */
+    return (quality << OD_COEFF_SHIFT >> OD_QUALITY_SHIFT) - (quality >> 2) - 1;
+  else
+    return quality - (od_log2(quality) >> 3);
 }
 
 int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
@@ -789,7 +807,7 @@ int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
 
       if (!is_golden_frame) {
         int dist_to_golden = enc->ip_frame_count % enc->input_queue.goldenframe_rate;
-        enc->rc.base_quantizer -= dist_to_golden;
+        enc->rc.base_quantizer = enc->rc.base_quantizer - dist_to_golden + (enc->input_queue.goldenframe_rate >> 1);
       }
 
       /*As originally written, qp modulation is applied to the coded quantizer.
