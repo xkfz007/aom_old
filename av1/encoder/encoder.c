@@ -2072,9 +2072,9 @@ AV1_COMP *av1_create_compressor(AV1EncoderConfig *oxcf,
   cpi->od_rc.state.info.framerate = cpi->framerate;
   cpi->od_rc.state.frame_width = cm->render_width;
   cpi->od_rc.state.frame_height = cm->render_height;
-  cpi->od_rc.input_queue.keyframe_rate = 250;
-  cpi->od_rc.state.info.keyframe_rate = 250;
-  cpi->od_rc.input_queue.goldenframe_rate = 10;
+  cpi->od_rc.input_queue.keyframe_rate = 256;
+  cpi->od_rc.state.info.keyframe_rate = 256;
+  cpi->od_rc.input_queue.goldenframe_rate = 16;
   cpi->od_rc.frame_delay = 1;
   cpi->od_rc.quality = oxcf->cq_level;
   od_enc_rc_init(&cpi->od_rc, cpi->oxcf.rc_mode == AOM_Q ? -1 : oxcf->target_bandwidth);
