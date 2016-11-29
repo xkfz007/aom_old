@@ -712,26 +712,11 @@ static int frame_type_count(od_enc_ctx *enc, int nframes[OD_FRAME_NSUBTYPES]) {
   return reservoir_frames;
 }
 
-
-
-#define OD_LOG2_INSHIFT 15
-#define OD_LOG2_OUTSHIFT 15
-#define OD_LOG2_INSCALE_1 (1./(1 << OD_LOG2_INSHIFT))
-#define OD_LOG2_OUTSCALE (1 << OD_LOG2_OUTSHIFT)
-static int16_t od_log2(int16_t x)
-{
-  return x + OD_MULT16_16_Q15(x, (14482 + OD_MULT16_16_Q15(x, (-23234
-   + OD_MULT16_16_Q15(x, (13643 + OD_MULT16_16_Q15(x, (-6403
-   + OD_MULT16_16_Q15(x, 1515)))))))));
-}
-
-
-
 static int quality_to_quantizer(int quality) {
   if (quality < 96) /* Linear region for low quantizers */
-    return (quality << OD_COEFF_SHIFT >> OD_QUALITY_SHIFT) - (quality >> 2) - 1;
+    return (quality << OD_COEFF_SHIFT >> OD_QUALITY_SHIFT) - (quality >> 2) + 1;
   else
-    return quality - (od_log2(quality) >> 3);
+    return quality - (quality >> 2) + (quality >> 4) + 2;
 }
 
 int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
@@ -806,8 +791,14 @@ int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
       }
 
       if (!is_golden_frame) {
-        int dist_to_golden = enc->ip_frame_count % enc->input_queue.goldenframe_rate;
-        enc->rc.base_quantizer = enc->rc.base_quantizer - dist_to_golden + (enc->input_queue.goldenframe_rate >> 1);
+        int dist_to_golden = enc->ip_frame_count % (enc->input_queue.goldenframe_rate >> 1);
+        int dist_away_golden = (enc->input_queue.goldenframe_rate >> 1) - dist_to_golden;
+        int boost = dist_to_golden;
+        if (dist_away_golden > dist_to_golden)
+            boost = dist_away_golden;
+        boost -= (enc->input_queue.goldenframe_rate >> 1);
+        //fprintf(stderr, "Dist = %i\n", boost);
+        enc->rc.base_quantizer = enc->rc.base_quantizer + boost;
       }
 
       /*As originally written, qp modulation is applied to the coded quantizer.
@@ -1102,7 +1093,7 @@ int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
   /*The deringing filter uses yet another adjusted lambda*/
   enc->dering_lambda = 0.67*OD_PVQ_LAMBDA*
    enc->target_quantizer*enc->target_quantizer;
-  *bottom_idx = lossy_quantizer_min;
+  *bottom_idx = enc->target_quantizer;
   *top_idx = lossy_quantizer_max;
   //fprintf(stderr, "RC_QUANT  = %i <- Q:%i T:%i C:%i B:%i -> %i\n", lossy_quantizer_min, enc->state.quantizer, enc->target_quantizer, enc->state.coded_quantizer, enc->rc.base_quantizer, lossy_quantizer_max);
   return enc->target_quantizer;
