@@ -716,7 +716,7 @@ static int quality_to_quantizer(int quality) {
   if (quality < 96) /* Linear region for low quantizers */
     return (quality << OD_COEFF_SHIFT >> OD_QUALITY_SHIFT) - (quality >> 2) + 1;
   else
-    return quality - (quality >> 2) + (quality >> 4) + 2;
+    return (quality << OD_COEFF_SHIFT >> OD_QUALITY_SHIFT) - (3 << OD_COEFF_SHIFT >> 1) + 1;
 }
 
 int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
@@ -761,11 +761,11 @@ int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
   mqp_Q12[OD_I_FRAME] = OD_F_Q12(OD_MQP_I);
   mqp_Q12[OD_P_FRAME] = OD_F_Q12(OD_MQP_P);
   mqp_Q12[OD_B_FRAME] = OD_F_Q12(OD_MQP_B);
-  mqp_Q12[OD_GOLDEN_P_FRAME] = OD_F_Q12(OD_MQP_I);
+  mqp_Q12[OD_GOLDEN_P_FRAME] = OD_F_Q12(OD_MQP_GP);
   dqp_Q45[OD_I_FRAME] = OD_F_Q45(OD_DQP_I);
   dqp_Q45[OD_P_FRAME] = OD_F_Q45(OD_DQP_P);
   dqp_Q45[OD_B_FRAME] = OD_F_Q45(OD_DQP_B);
-  dqp_Q45[OD_GOLDEN_P_FRAME] = OD_F_Q45(OD_DQP_I);
+  dqp_Q45[OD_GOLDEN_P_FRAME] = OD_F_Q45(OD_DQP_GP);
   /*Is rate control active?*/
   if (enc->rc.target_bitrate <= 0) {
     /*Rate control is not active; derive quantizer directly from
