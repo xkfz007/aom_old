@@ -714,9 +714,9 @@ static int frame_type_count(od_enc_ctx *enc, int nframes[OD_FRAME_NSUBTYPES]) {
 
 static int quality_to_quantizer(int quality) {
   if (quality < 96) /* Linear region for low quantizers */
-    return (quality << OD_COEFF_SHIFT >> OD_QUALITY_SHIFT) - (quality >> 2) + 1;
+    return (quality << OD_COEFF_SHIFT >> OD_QUALITY_SHIFT) - (quality >> 2) + 3;
   else
-    return (quality << OD_COEFF_SHIFT >> OD_QUALITY_SHIFT) - (3 << OD_COEFF_SHIFT >> 1) + 1;
+    return (quality << OD_COEFF_SHIFT >> OD_QUALITY_SHIFT) - (quality >> 3) - 1;
 }
 
 int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
@@ -797,6 +797,7 @@ int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
         if (dist_away_golden > dist_to_golden)
             boost = dist_away_golden;
         boost -= (enc->input_queue.goldenframe_rate >> 1);
+        boost *= (enc->rc.base_quantizer)/10;
         //fprintf(stderr, "Dist = %i\n", boost);
         enc->rc.base_quantizer = enc->rc.base_quantizer + boost;
       }
