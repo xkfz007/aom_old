@@ -791,12 +791,13 @@ int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
       }
 
       if (!is_golden_frame) {
-        int dist_to_golden = enc->ip_frame_count % (enc->input_queue.goldenframe_rate >> 1);
-        int dist_away_golden = (enc->input_queue.goldenframe_rate >> 1) - dist_to_golden;
+        int pattern_rate = (enc->input_queue.goldenframe_rate >> 2);
+        int dist_to_golden = enc->ip_frame_count % pattern_rate;
+        int dist_away_golden = pattern_rate - dist_to_golden;
         int boost = dist_to_golden;
         if (dist_away_golden > dist_to_golden)
             boost = dist_away_golden;
-        boost -= (enc->input_queue.goldenframe_rate >> 1);
+        boost -= pattern_rate;
         boost *= (enc->rc.base_quantizer)/10;
         //fprintf(stderr, "Dist = %i\n", boost);
         enc->rc.base_quantizer = enc->rc.base_quantizer + boost;
