@@ -712,11 +712,11 @@ static int frame_type_count(od_enc_ctx *enc, int nframes[OD_FRAME_NSUBTYPES]) {
   return reservoir_frames;
 }
 
-static int quality_to_quantizer(int quality) {
+static int quality_to_quantizer(int quality, int bit_depth) {
   if (quality < 96) /* Linear region for low quantizers */
     return (quality << OD_COEFF_SHIFT >> OD_QUALITY_SHIFT) - (quality >> 2) + 3;
   else
-    return (quality << OD_COEFF_SHIFT >> OD_QUALITY_SHIFT) - (quality >> 3) - 1;
+    return av1_convert_qindex_to_q(quality, bit_depth) + 60;
 }
 
 int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
@@ -784,23 +784,18 @@ int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
       int64_t log_quantizer;
       if (enc->quality == -1) {
         /*A quality of -1 means quality was unset; use a default.*/
-        enc->rc.base_quantizer = quality_to_quantizer(10);
+        enc->rc.base_quantizer = quality_to_quantizer(10, enc->bit_depth);
       }
       else {
-        enc->rc.base_quantizer = quality_to_quantizer(enc->quality);
+        enc->rc.base_quantizer = quality_to_quantizer(enc->quality, enc->bit_depth);
       }
 
       if (!is_golden_frame) {
-        int pattern_rate = (enc->input_queue.goldenframe_rate >> 2);
-        int dist_to_golden = enc->ip_frame_count % pattern_rate;
-        int dist_away_golden = pattern_rate - dist_to_golden;
-        int boost = dist_to_golden;
-        if (dist_away_golden > dist_to_golden)
-            boost = dist_away_golden;
-        boost -= pattern_rate;
-        boost *= (enc->rc.base_quantizer)/10;
-        //fprintf(stderr, "Dist = %i\n", boost);
-        enc->rc.base_quantizer = enc->rc.base_quantizer + boost;
+        const double delta_rate[8] = { 0.50, 1.0, 0.85, 1.0, 0.70, 1.0, 0.85, 1.0 };
+        const int delta_qindex = av1_compute_qdelta(
+          enc->alt_rc, enc->rc.base_quantizer,
+          enc->rc.base_quantizer * delta_rate[enc->ip_frame_count % 8], 8);
+        enc->rc.base_quantizer = enc->rc.base_quantizer + delta_qindex;
       }
 
       /*As originally written, qp modulation is applied to the coded quantizer.
@@ -903,7 +898,7 @@ int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
       Otherwise we can use up to and including the coarsest codable
        quantizer.*/
     if(enc->quality > 0)
-      qhi = quality_to_quantizer(enc->quality);
+      qhi = quality_to_quantizer(enc->quality, enc->bit_depth);
     else
       qhi = lossy_quantizer_max;
     base_quantizer = (qlo + qhi) >> 1;

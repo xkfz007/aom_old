@@ -14,6 +14,7 @@
 
 #include "av1/common/quant_common.h"
 #include "av1/encoder/encint.h"
+#include "av1/encoder/ratectrl.h"
 
 #define OD_N_CODED_QUANTIZERS QINDEX_RANGE
 

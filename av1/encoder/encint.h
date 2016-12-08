@@ -163,6 +163,8 @@ struct od_rc_state {
 };
 
 struct daala_enc_ctx{
+  void *alt_rc;
+  int bit_depth;
   int quality;
   int target_quantizer;
   int b_frames;
