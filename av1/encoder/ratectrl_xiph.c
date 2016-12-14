@@ -714,7 +714,7 @@ static int frame_type_count(od_enc_ctx *enc, int nframes[OD_FRAME_NSUBTYPES]) {
 
 static int quality_to_quantizer(int quality, int bit_depth) {
   if (quality < 96) /* Linear region for low quantizers */
-    return (quality << OD_COEFF_SHIFT >> OD_QUALITY_SHIFT) - (quality >> 2) + 3;
+    return (quality << OD_COEFF_SHIFT >> OD_QUALITY_SHIFT) - (quality >> 2);
   else
     return av1_convert_qindex_to_q(quality, bit_depth) + 60;
 }
@@ -724,6 +724,9 @@ int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
   int frame_subtype;
   int lossy_quantizer_min;
   int lossy_quantizer_max;
+  double mqp_i = OD_MQP_I;
+  double mqp_p = OD_MQP_P;
+  double mqp_gp = OD_MQP_GP;
   int32_t mqp_Q12[OD_FRAME_NSUBTYPES];
   int64_t dqp_Q45[OD_FRAME_NSUBTYPES];
   /*Verify the closed-form frame type determination code matches what the
@@ -758,10 +761,14 @@ int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
   frame_subtype = is_golden_frame && frame_type == OD_P_FRAME ?
     OD_GOLDEN_P_FRAME : frame_type;
   /*Stash quantizer modulation by frame type.*/
-  mqp_Q12[OD_I_FRAME] = OD_F_Q12(OD_MQP_I);
-  mqp_Q12[OD_P_FRAME] = OD_F_Q12(OD_MQP_P);
+  double mqp_delta = (255 - enc->rc.base_quantizer)/2000.0f;
+  mqp_i -= mqp_delta;
+  mqp_p += mqp_delta;
+  mqp_gp -= mqp_delta/2;
+  mqp_Q12[OD_I_FRAME] = OD_F_Q12(mqp_i);
+  mqp_Q12[OD_P_FRAME] = OD_F_Q12(mqp_p);
   mqp_Q12[OD_B_FRAME] = OD_F_Q12(OD_MQP_B);
-  mqp_Q12[OD_GOLDEN_P_FRAME] = OD_F_Q12(OD_MQP_GP);
+  mqp_Q12[OD_GOLDEN_P_FRAME] = OD_F_Q12(mqp_gp);
   dqp_Q45[OD_I_FRAME] = OD_F_Q45(OD_DQP_I);
   dqp_Q45[OD_P_FRAME] = OD_F_Q45(OD_DQP_P);
   dqp_Q45[OD_B_FRAME] = OD_F_Q45(OD_DQP_B);
