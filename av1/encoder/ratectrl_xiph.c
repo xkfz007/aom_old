@@ -791,11 +791,24 @@ int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
       }
 
       if (!is_golden_frame) {
-        const double delta_rate[8] = { 0.50, 1.0, 0.85, 1.0, 0.70, 1.0, 0.85, 1.0 };
-        const int delta_qindex = av1_compute_qdelta(
-          enc->alt_rc, enc->rc.base_quantizer,
-          enc->rc.base_quantizer * delta_rate[enc->ip_frame_count % 8], 8);
-        enc->rc.base_quantizer = enc->rc.base_quantizer + delta_qindex;
+        if (enc->quality < 96) {
+          int pattern_rate = (enc->input_queue.goldenframe_rate >> 1);
+          int dist_to_golden = enc->ip_frame_count % pattern_rate;
+          int dist_away_golden = pattern_rate - dist_to_golden;
+          int boost = dist_to_golden;
+          if (dist_away_golden > dist_to_golden)
+              boost = dist_away_golden;
+          boost -= pattern_rate;
+          boost *= (enc->rc.base_quantizer)/10;
+          enc->rc.base_quantizer = enc->rc.base_quantizer + boost;
+        } else {
+          const double delta_rate[] = { 0.50, 1.0, 0.85, 1.0, 0.70, 1.0, 0.85, 1.0,
+                                        0.50, 1.0, 0.85, 1.0, 0.70, 1.0, 0.85, 1.0,
+                                        0.50, 1.0, 0.85, 1.0, 0.70, 1.0, 0.85, 1.0, 0.50 };
+          const int delta_qindex = av1_compute_qdelta(enc->alt_rc, enc->rc.base_quantizer,
+                                                      enc->rc.base_quantizer * delta_rate[enc->ip_frame_count % enc->input_queue.goldenframe_rate], enc->input_queue.goldenframe_rate);
+          enc->rc.base_quantizer += delta_qindex;
+        }
       }
 
       /*As originally written, qp modulation is applied to the coded quantizer.

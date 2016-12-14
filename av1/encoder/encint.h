@@ -42,9 +42,9 @@ typedef struct od_rc_state od_rc_state;
 # define OD_FRAME_NSUBTYPES (4)
 
 /*Constants for frame QP modulation.*/
-# define OD_MQP_I (1.00)
-# define OD_MQP_P (1.04)
-# define OD_MQP_GP (1.01)
+# define OD_MQP_I (0.98)
+# define OD_MQP_P (1.06)
+# define OD_MQP_GP (0.99)
 # define OD_MQP_B (1.00)
 # define OD_DQP_I (-2)
 # define OD_DQP_P (0)
