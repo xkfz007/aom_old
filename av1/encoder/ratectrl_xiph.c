@@ -592,7 +592,7 @@ int od_frame_type(daala_enc_ctx *enc, int64_t coding_frame_count, int *is_golden
     frame_type = OD_I_FRAME;
   }
   else {
-    int keyrate = enc->input_queue.keyframe_rate;
+    int keyrate = enc->state.info.keyframe_rate;
     if (enc->input_queue.closed_gop) {
       int ip_per_gop;
       int gop_n;
@@ -761,10 +761,6 @@ int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
   frame_subtype = is_golden_frame && frame_type == OD_P_FRAME ?
     OD_GOLDEN_P_FRAME : frame_type;
   /*Stash quantizer modulation by frame type.*/
-  double mqp_delta = (255 - enc->rc.base_quantizer)/2000.0f;
-  mqp_i -= mqp_delta;
-  mqp_p += mqp_delta;
-  mqp_gp -= mqp_delta;
   mqp_Q12[OD_I_FRAME] = OD_F_Q12(mqp_i);
   mqp_Q12[OD_P_FRAME] = OD_F_Q12(mqp_p);
   mqp_Q12[OD_B_FRAME] = OD_F_Q12(OD_MQP_B);
@@ -817,6 +813,16 @@ int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
           enc->rc.base_quantizer += delta_qindex;
         }
       }
+
+      double mqp_delta = (255 - enc->rc.base_quantizer)/2000.0f;
+      mqp_i -= 2.5*mqp_delta;
+      mqp_p += mqp_delta;
+      mqp_gp -= mqp_delta/2.5;
+
+      mqp_Q12[OD_I_FRAME] = OD_F_Q12(mqp_i);
+      mqp_Q12[OD_P_FRAME] = OD_F_Q12(mqp_p);
+      mqp_Q12[OD_B_FRAME] = OD_F_Q12(OD_MQP_B);
+      mqp_Q12[OD_GOLDEN_P_FRAME] = OD_F_Q12(mqp_gp);
 
       /*As originally written, qp modulation is applied to the coded quantizer.
         Because we now have and use a more precise target quantizer for various

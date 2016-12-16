@@ -99,7 +99,6 @@ struct od_input_queue {
   int encode_size;
 
   /* Input queue parameters */
-  int keyframe_rate;
   int goldenframe_rate;
   int frame_delay;
 
