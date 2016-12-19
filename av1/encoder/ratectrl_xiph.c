@@ -761,10 +761,6 @@ int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
   frame_subtype = is_golden_frame && frame_type == OD_P_FRAME ?
     OD_GOLDEN_P_FRAME : frame_type;
   /*Stash quantizer modulation by frame type.*/
-  double mqp_delta = (255 - enc->rc.base_quantizer)/2000.0f;
-  mqp_i -= mqp_delta;
-  mqp_p += mqp_delta;
-  mqp_gp -= mqp_delta/2;
   mqp_Q12[OD_I_FRAME] = OD_F_Q12(mqp_i);
   mqp_Q12[OD_P_FRAME] = OD_F_Q12(mqp_p);
   mqp_Q12[OD_B_FRAME] = OD_F_Q12(OD_MQP_B);
@@ -796,6 +792,15 @@ int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
       else {
         enc->rc.base_quantizer = quality_to_quantizer(enc->quality, enc->bit_depth);
       }
+
+      double mqp_delta = (255 - enc->rc.base_quantizer)/2000.0f;
+      mqp_i -= mqp_delta;
+      mqp_p += mqp_delta;
+      mqp_gp -= mqp_delta/2;
+      mqp_Q12[OD_I_FRAME] = OD_F_Q12(mqp_i);
+      mqp_Q12[OD_P_FRAME] = OD_F_Q12(mqp_p);
+      mqp_Q12[OD_B_FRAME] = OD_F_Q12(OD_MQP_B);
+      mqp_Q12[OD_GOLDEN_P_FRAME] = OD_F_Q12(mqp_gp);
 
       if (!is_golden_frame) {
         if (enc->quality < 96) {
