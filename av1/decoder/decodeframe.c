@@ -3708,7 +3708,7 @@ static size_t read_uncompressed_header(AV1Decoder *pbi,
   if (cm->frame_type == KEY_FRAME) {
     if (!av1_read_sync_code(rb))
       aom_internal_error(&cm->error, AOM_CODEC_UNSUP_BITSTREAM,
-                         "Invalid frame sync code");
+                         "Invalid frame sync code (key frame)");
 
     read_bitdepth_colorspace_sampling(cm, rb);
     pbi->refresh_frame_flags = (1 << REF_FRAMES) - 1;
@@ -3752,7 +3752,7 @@ static size_t read_uncompressed_header(AV1Decoder *pbi,
     if (cm->intra_only) {
       if (!av1_read_sync_code(rb))
         aom_internal_error(&cm->error, AOM_CODEC_UNSUP_BITSTREAM,
-                           "Invalid frame sync code");
+                           "Invalid frame sync code (intra only)");
 
       read_bitdepth_colorspace_sampling(cm, rb);
 
