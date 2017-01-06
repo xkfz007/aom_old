@@ -2076,6 +2076,7 @@ AV1_COMP *av1_create_compressor(AV1EncoderConfig *oxcf,
   cpi->od_rc.state.info.keyframe_rate = 250;
   cpi->od_rc.input_queue.goldenframe_rate = 10;
   cpi->od_rc.frame_delay = 1;
+  cpi->od_rc.active_altref = 0;
   cpi->od_rc.bit_depth = cm->bit_depth;
   cpi->od_rc.quality = oxcf->cq_level;
   cpi->od_rc.alt_rc = &cpi->rc;
@@ -3738,10 +3739,8 @@ static void set_size_dependent_vars(AV1_COMP *cpi, int *q, int *bottom_index,
     frame_type = OD_I_FRAME;
   else if (cm->frame_type == INTER_FRAME)
     frame_type = OD_P_FRAME;
-  else if (cm->frame_type == ALTREF_FRAME)
-    abort();
-  else
-    abort();
+  else if (cpi->od_rc.active_altref)
+    frame_type = OD_B_FRAME;
   *q = od_enc_rc_select_quantizers_and_lambdas(&cpi->od_rc, cpi->refresh_golden_frame,
                                                frame_type,
                                                bottom_index, top_index);
@@ -4803,10 +4802,8 @@ static void encode_frame_to_data_rate(AV1_COMP *cpi, size_t *size,
     frame_type = OD_I_FRAME;
   else if (cm->frame_type == INTER_FRAME)
     frame_type = OD_P_FRAME;
-  else if (cm->frame_type == ALTREF_FRAME)
-    abort();
-  else
-    abort();
+  else if (cpi->rc.source_alt_ref_active)
+    frame_type = OD_B_FRAME;
   od_enc_rc_update_state(&cpi->od_rc, *size << 3,
                          cpi->refresh_golden_frame,
                          frame_type, 0);
@@ -4872,17 +4869,16 @@ static void Pass0Encode(AV1_COMP *cpi, size_t *size, uint8_t *dest,
   cpi->od_rc.quality = cpi->oxcf.cq_level;
   frame_type = od_frame_type(&cpi->od_rc, cpi->od_rc.curr_coding_order, &is_golden, &ip_count);
 
+    cpi->od_rc.active_altref = 0;
+
   if (frame_type == OD_I_FRAME) {
     frame_type = KEY_FRAME;
     cpi->frame_flags &= FRAMEFLAGS_KEY;
   } else if (frame_type == OD_P_FRAME) {
     frame_type = INTER_FRAME;
   } else if (frame_type == OD_B_FRAME) {
-    //frame_type = BWDREF_FRAME;
-    //cpi->frame_flags &= FRAMEFLAGS_BWDREF;
-    abort();
-  } else {
-    abort();
+    cpi->rc.source_alt_ref_active = 1;
+    cpi->od_rc.active_altref = 1;
   }
 
   cpi->refresh_golden_frame = is_golden;
