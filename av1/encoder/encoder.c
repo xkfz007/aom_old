@@ -2068,7 +2068,7 @@ AV1_COMP *av1_create_compressor(AV1EncoderConfig *oxcf,
   cpi->common.buffer_pool = pool;
 
   init_config(cpi, oxcf);
-#ifdef CONFIG_XIPHRC
+#if CONFIG_XIPHRC == 1
   cpi->od_rc.state.info.framerate = cpi->framerate;
   cpi->od_rc.state.frame_width = cm->render_width;
   cpi->od_rc.state.frame_height = cm->render_height;
@@ -3732,7 +3732,7 @@ static void set_size_dependent_vars(AV1_COMP *cpi, int *q, int *bottom_index,
   av1_set_speed_features_framesize_dependent(cpi);
 
   // Decide q and q bounds.
-#ifdef CONFIG_XIPHRC
+#if CONFIG_XIPHRC == 1
   int frame_type;
   if (cm->frame_type == KEY_FRAME)
     frame_type = OD_I_FRAME;
@@ -4576,7 +4576,7 @@ static void encode_frame_to_data_rate(AV1_COMP *cpi, size_t *size,
     // to do post-encoding update accordingly.
     if (cpi->rc.is_src_frame_alt_ref) {
       av1_set_target_rate(cpi);
-#ifdef CONFIG_XIPHRC
+#if CONFIG_XIPHRC == 1
       int frame_type = cm->frame_type == INTER_FRAME ? OD_P_FRAME : OD_I_FRAME;
       od_enc_rc_update_state(&cpi->od_rc, *size << 3,
                              cpi->frame_flags & FRAMEFLAGS_GOLDEN,
@@ -4640,7 +4640,7 @@ static void encode_frame_to_data_rate(AV1_COMP *cpi, size_t *size,
   // Never drop on key frame.
   if (oxcf->pass == 0 && oxcf->rc_mode == AOM_CBR &&
       cm->frame_type != KEY_FRAME) {
-#ifdef CONFIG_XIPHRC
+#if CONFIG_XIPHRC == 1
     if (0) {
 #else
     if (av1_rc_drop_frame(cpi)) {
@@ -4797,7 +4797,7 @@ static void encode_frame_to_data_rate(AV1_COMP *cpi, size_t *size,
 
   cm->last_frame_type = cm->frame_type;
 
-#ifdef CONFIG_XIPHRC
+#if CONFIG_XIPHRC == 1
   int frame_type;
   if (cm->frame_type == KEY_FRAME)
     frame_type = OD_I_FRAME;

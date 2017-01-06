@@ -671,8 +671,7 @@ static int frame_type_count(od_enc_ctx *enc, int nframes[OD_FRAME_NSUBTYPES]) {
     int is_golden;
     int64_t dummy;
     frame_type =
-     od_frame_type(enc, enc->curr_coding_order + i,
-     &is_golden, &dummy);
+     od_frame_type(enc, enc->curr_coding_order + i, &is_golden, &dummy);
     switch (frame_type) {
       case OD_I_FRAME: {
         for (j=0; j<OD_FRAME_NSUBTYPES; j++) nframes[j] += acc[j];
