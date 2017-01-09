@@ -4583,6 +4583,7 @@ static void encode_frame_to_data_rate(AV1_COMP *cpi, size_t *size,
 #else
       av1_rc_postencode_update(cpi, *size);
 #endif
+      //fprintf(stderr, "Post update (ALTREF) = %i\n", cm->frame_type);
     }
 
     cm->last_width = cm->width;
@@ -4814,6 +4815,7 @@ static void encode_frame_to_data_rate(AV1_COMP *cpi, size_t *size,
 #else
   av1_rc_postencode_update(cpi, *size);
 #endif
+  //fprintf(stderr, "Ftype = %i %i %i\n", cm->frame_type, cpi->rc.source_alt_ref_active, cpi->frame_flags & FRAMEFLAGS_ALTREF);
 
 #if 0
   output_frame_level_debug_stats(cpi);
@@ -4879,7 +4881,15 @@ static void Pass0Encode(AV1_COMP *cpi, size_t *size, uint8_t *dest,
   } else if (frame_type == OD_B_FRAME) {
     cpi->rc.source_alt_ref_active = 1;
     cpi->od_rc.active_altref = 1;
+    cpi->frame_flags &= FRAMEFLAGS_ALTREF;
   }
+
+#if 0
+   if (!((trig++) % 10)) {
+       cpi->refresh_alt_ref_frame = 1;
+       cpi->rc.source_alt_ref_active = 1;
+   }
+#endif
 
   cpi->refresh_golden_frame = is_golden;
   cpi->common.frame_type = frame_type;
