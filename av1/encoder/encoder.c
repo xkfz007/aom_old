@@ -4884,12 +4884,10 @@ static void Pass0Encode(AV1_COMP *cpi, size_t *size, uint8_t *dest,
     cpi->frame_flags &= FRAMEFLAGS_ALTREF;
   }
 
-#if 0
    if (!((trig++) % 10)) {
        cpi->refresh_alt_ref_frame = 1;
        cpi->rc.source_alt_ref_active = 1;
    }
-#endif
 
   cpi->refresh_golden_frame = is_golden;
   cpi->common.frame_type = frame_type;
