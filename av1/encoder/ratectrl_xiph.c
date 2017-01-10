@@ -414,18 +414,6 @@ static void od_enc_rc_reset(od_enc_ctx *enc) {
     enc->rc.exp[OD_P_FRAME] = 73;
     enc->rc.log_scale[OD_P_FRAME] = od_blog64(1260) - OD_Q57(OD_COEFF_SHIFT);
   }
-  if (ibpp < 4) {
-    enc->rc.exp[OD_B_FRAME] = 100;
-    enc->rc.log_scale[OD_B_FRAME] = od_blog64(2249) - OD_Q57(OD_COEFF_SHIFT);
-  }
-  else if (ibpp < 8) {
-    enc->rc.exp[OD_B_FRAME] = 95;
-    enc->rc.log_scale[OD_B_FRAME] = od_blog64(1751) - OD_Q57(OD_COEFF_SHIFT);
-  }
-  else {
-    enc->rc.exp[OD_B_FRAME] = 73;
-    enc->rc.log_scale[OD_B_FRAME] = od_blog64(1260) - OD_Q57(OD_COEFF_SHIFT);
-  }
   /*Golden P-frames both use the same log_scale and exp modeling
      values as regular P-frames and the same scale follower.
     For convenience in the rate calculation code, we maintain a copy of
@@ -447,26 +435,24 @@ static void od_enc_rc_reset(od_enc_ctx *enc) {
   enc->rc.log_drop_scale[OD_I_FRAME] = OD_Q57(0);
   enc->rc.prev_drop_count[OD_P_FRAME] = 0;
   enc->rc.log_drop_scale[OD_P_FRAME] = OD_Q57(0);
-  enc->rc.prev_drop_count[OD_B_FRAME] = 0;
-  enc->rc.log_drop_scale[OD_B_FRAME] = OD_Q57(0);
   enc->rc.prev_drop_count[OD_GOLDEN_P_FRAME] = 0;
   enc->rc.log_drop_scale[OD_GOLDEN_P_FRAME] = OD_Q57(0);
+  enc->rc.prev_drop_count[OD_ALTREF_P_FRAME] = 0;
+  enc->rc.log_drop_scale[OD_ALTREF_P_FRAME] = OD_Q57(0);
   /*Set up second order followers, initialized according to corresponding
      time constants.*/
   od_iir_bessel2_init(&enc->rc.scalefilter[OD_I_FRAME], 4,
    od_q57_to_q24(enc->rc.log_scale[OD_I_FRAME]));
   od_iir_bessel2_init(&enc->rc.scalefilter[OD_P_FRAME],enc->rc.inter_p_delay,
    od_q57_to_q24(enc->rc.log_scale[OD_P_FRAME]));
-  od_iir_bessel2_init(&enc->rc.scalefilter[OD_B_FRAME],enc->rc.inter_b_delay,
-   od_q57_to_q24(enc->rc.log_scale[OD_B_FRAME]));
   od_iir_bessel2_init(&enc->rc.vfrfilter[OD_I_FRAME],4,
    od_bexp64_q24(enc->rc.log_drop_scale[OD_I_FRAME]));
   od_iir_bessel2_init(&enc->rc.vfrfilter[OD_P_FRAME],4,
    od_bexp64_q24(enc->rc.log_drop_scale[OD_P_FRAME]));
-  od_iir_bessel2_init(&enc->rc.vfrfilter[OD_B_FRAME],4,
-   od_bexp64_q24(enc->rc.log_drop_scale[OD_B_FRAME]));
   od_iir_bessel2_init(&enc->rc.vfrfilter[OD_GOLDEN_P_FRAME],4,
    od_bexp64_q24(enc->rc.log_drop_scale[OD_GOLDEN_P_FRAME]));
+  od_iir_bessel2_init(&enc->rc.vfrfilter[OD_ALTREF_P_FRAME],4,
+   od_bexp64_q24(enc->rc.log_drop_scale[OD_ALTREF_P_FRAME]));
 }
 
 int od_enc_rc_resize(od_enc_ctx *enc) {
@@ -505,12 +491,6 @@ int od_enc_rc_resize(od_enc_ctx *enc) {
       od_iir_bessel2_init(&enc->rc.scalefilter[OD_P_FRAME], idt,
        enc->rc.scalefilter[OD_P_FRAME].y[0]);
       enc->rc.inter_p_delay = idt;
-    }
-    if (idt < OD_MINI(enc->rc.inter_b_delay,
-     enc->rc.frame_count[OD_B_FRAME])) {
-      od_iir_bessel2_init(&enc->rc.scalefilter[OD_B_FRAME], idt,
-       enc->rc.scalefilter[OD_B_FRAME].y[0]);
-      enc->rc.inter_b_delay = idt;
     }
   }
   return OD_SUCCESS;
@@ -599,34 +579,30 @@ int od_frame_type(daala_enc_ctx *enc, int64_t coding_frame_count, int *is_golden
       int ip_per_gop;
       int gop_n;
       int gop_i;
-      ip_per_gop = (keyrate + enc->frame_delay - 2)/enc->frame_delay + 1;
+      ip_per_gop = (keyrate - 1)/2;
       gop_n = coding_frame_count/keyrate;
       gop_i = coding_frame_count - gop_n*keyrate;
       *ip_count = gop_n * ip_per_gop + (gop_i > 0) +
-       (gop_i + enc->frame_delay - 2)/enc->frame_delay;
-      frame_type = gop_i == 0 ? OD_I_FRAME :
-        (gop_i - 1) % enc->frame_delay == 0 ? OD_P_FRAME : OD_B_FRAME;
+       (gop_i -1);
+      frame_type = gop_i == 0 ? OD_I_FRAME : OD_P_FRAME;
     }
     else {
       int ip_per_gop;
       int gop_n;
       int gop_i;
-      ip_per_gop = (keyrate + enc->frame_delay - 1)/enc->frame_delay;
+      ip_per_gop = (keyrate);
       gop_n = (coding_frame_count - 1)/keyrate;
       gop_i = coding_frame_count - gop_n*keyrate - 1;
       *ip_count = (coding_frame_count > 0) + gop_n * ip_per_gop +
-       (gop_i + enc->frame_delay - 1)/enc->frame_delay;
+       (gop_i);
       frame_type =
-       gop_i % enc->frame_delay != 0 ? OD_B_FRAME :
-       gop_i / enc->frame_delay < ip_per_gop-1 ? OD_P_FRAME : OD_I_FRAME;
+       gop_i / 1 < ip_per_gop - 1 ? OD_P_FRAME : OD_I_FRAME;
     }
   }
   *is_golden = *ip_count %
-   (enc->input_queue.goldenframe_rate/(enc->b_frames + 1)) == 0 &&
-   frame_type != OD_B_FRAME ? 1 : frame_type == OD_I_FRAME;
+   (enc->input_queue.goldenframe_rate/(enc->b_frames + 1)) == 0 || frame_type == OD_I_FRAME;
   *is_altref = *ip_count %
-   (enc->input_queue.altref_rate/(enc->b_frames + 1)) == 0 &&
-   frame_type != OD_B_FRAME ? 1 : frame_type == OD_I_FRAME;
+   (enc->input_queue.altref_rate/(enc->b_frames + 1)) == 0 || frame_type == OD_I_FRAME;
   //fprintf(stderr, "Frametype = %i\n", frame_type);
   return frame_type;
 }
@@ -697,11 +673,6 @@ static int frame_type_count(od_enc_ctx *enc, int nframes[OD_FRAME_NSUBTYPES]) {
         }
         break;
       }
-      case OD_B_FRAME: {
-        ++acc[OD_B_FRAME];
-        ++count;
-        break;
-      }
     }
   }
   /*If there were no I-frames at all, or only the first frame was an I-frame,
@@ -732,6 +703,7 @@ int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
   double mqp_i = OD_MQP_I;
   double mqp_p = OD_MQP_P;
   double mqp_gp = OD_MQP_GP;
+  double mqp_ap = OD_MQP_AP;
   int32_t mqp_Q12[OD_FRAME_NSUBTYPES];
   int64_t dqp_Q45[OD_FRAME_NSUBTYPES];
   /*Verify the closed-form frame type determination code matches what the
@@ -770,12 +742,12 @@ int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
   /*Stash quantizer modulation by frame type.*/
   mqp_Q12[OD_I_FRAME] = OD_F_Q12(mqp_i);
   mqp_Q12[OD_P_FRAME] = OD_F_Q12(mqp_p);
-  mqp_Q12[OD_B_FRAME] = OD_F_Q12(OD_MQP_B);
   mqp_Q12[OD_GOLDEN_P_FRAME] = OD_F_Q12(mqp_gp);
+  mqp_Q12[OD_ALTREF_P_FRAME] = OD_F_Q12(mqp_ap);
   dqp_Q45[OD_I_FRAME] = OD_F_Q45(OD_DQP_I);
   dqp_Q45[OD_P_FRAME] = OD_F_Q45(OD_DQP_P);
-  dqp_Q45[OD_B_FRAME] = OD_F_Q45(OD_DQP_B);
   dqp_Q45[OD_GOLDEN_P_FRAME] = OD_F_Q45(OD_DQP_GP);
+  dqp_Q45[OD_ALTREF_P_FRAME] = OD_F_Q45(OD_DQP_AP);
   /*Is rate control active?*/
   if (enc->rc.target_bitrate <= 0) {
     /*Rate control is not active; derive quantizer directly from
@@ -800,8 +772,8 @@ int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
       mqp_gp -= mqp_delta;
       mqp_Q12[OD_I_FRAME] = OD_F_Q12(mqp_i);
       mqp_Q12[OD_P_FRAME] = OD_F_Q12(mqp_p);
-      mqp_Q12[OD_B_FRAME] = OD_F_Q12(OD_MQP_B);
       mqp_Q12[OD_GOLDEN_P_FRAME] = OD_F_Q12(mqp_gp);
+      mqp_Q12[OD_ALTREF_P_FRAME] = OD_F_Q12(mqp_ap);
 
       if (enc->quality == -1) {
         /*A quality of -1 means quality was unset; use a default.*/
@@ -877,7 +849,7 @@ int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
   else {
     int clamp;
     int reservoir_frames;
-    int nframes[4];
+    int nframes[7];
     int64_t rate_bias;
     int64_t rate_total;
     int base_quantizer;
@@ -903,10 +875,10 @@ int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
      nframes[OD_I_FRAME]);
     nframes[OD_P_FRAME] = od_rc_scale_drop(&enc->rc, OD_P_FRAME,
      nframes[OD_P_FRAME]);
-    nframes[OD_B_FRAME] = od_rc_scale_drop(&enc->rc, OD_B_FRAME,
-     nframes[OD_B_FRAME]);
     nframes[OD_GOLDEN_P_FRAME] = od_rc_scale_drop(&enc->rc, OD_GOLDEN_P_FRAME,
      nframes[OD_GOLDEN_P_FRAME]);
+    nframes[OD_ALTREF_P_FRAME] = od_rc_scale_drop(&enc->rc, OD_ALTREF_P_FRAME,
+     nframes[OD_ALTREF_P_FRAME]);
     /*If we've been missing our target, add a penalty term.*/
     rate_bias = (enc->rc.rate_bias/(enc->state.cur_time + 1000))*
      reservoir_frames;
@@ -1177,12 +1149,6 @@ int od_enc_rc_update_state(od_enc_ctx *enc, long bits,
          enc->rc.frame_count[OD_P_FRAME] >= enc->rc.inter_p_delay) {
           od_iir_bessel2_reinit(&enc->rc.scalefilter[OD_P_FRAME],
            ++enc->rc.inter_p_delay);
-        }
-        if (frame_type == OD_B_FRAME &&
-         enc->rc.inter_b_delay < enc->rc.inter_delay_target &&
-         enc->rc.frame_count[OD_B_FRAME] >= enc->rc.inter_b_delay) {
-          od_iir_bessel2_reinit(&enc->rc.scalefilter[OD_B_FRAME],
-           ++enc->rc.inter_b_delay);
         }
         /*Update the low-pass scale filter for this frame type
            regardless of whether or not we drop this frame.*/

@@ -32,24 +32,24 @@ typedef struct od_rc_state od_rc_state;
 /*Frame types.*/
 # define OD_I_FRAME (0)
 # define OD_P_FRAME (1)
-# define OD_B_FRAME (2)
 
 # define OD_LAMBDA_SCALE       (2)
 
 /*Frame subtypes that need to be tracked separately by rate control.
   Keep these contiguous with but past the end of the main frame types above.*/
 # define OD_GOLDEN_P_FRAME (3)
-# define OD_FRAME_NSUBTYPES (4)
+# define OD_ALTREF_P_FRAME (4)
+# define OD_FRAME_NSUBTYPES (5)
 
 /*Constants for frame QP modulation.*/
 # define OD_MQP_I (0.98)
 # define OD_MQP_P (1.06)
 # define OD_MQP_GP (0.99)
-# define OD_MQP_B (1.00)
+# define OD_MQP_AP (0.92)
 # define OD_DQP_I (-2)
 # define OD_DQP_P (0)
 # define OD_DQP_GP (-2)
-# define OD_DQP_B (1)
+# define OD_DQP_AP (-2)
 
 /*OD_QUALITY_SHIFT specifies the number of fractional bits in a
    passed in 'quality' parameter.
@@ -102,7 +102,6 @@ struct od_input_queue {
   int keyframe_rate;
   int goldenframe_rate;
   int altref_rate;
-  int frame_delay;
 
   /* Input queue state */
   int frame_number;
@@ -187,8 +186,6 @@ struct daala_enc_ctx{
   int use_activity_masking;
   /* Mode of quantization matrice : FLAT (0) or HVS (1) */
   int qm;
-  /** Frame delay. */
-  int frame_delay;
   /** Displaying order of current frame being encoded. */
   int64_t curr_display_order;
   /** Coding order of current frame being encoded. */

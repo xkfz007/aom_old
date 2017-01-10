@@ -2075,8 +2075,7 @@ AV1_COMP *av1_create_compressor(AV1EncoderConfig *oxcf,
   cpi->od_rc.input_queue.keyframe_rate = 250;
   cpi->od_rc.state.info.keyframe_rate = 250;
   cpi->od_rc.input_queue.goldenframe_rate = 10;
-  cpi->od_rc.input_queue.altref_rate = 20;
-  cpi->od_rc.frame_delay = 1;
+  cpi->od_rc.input_queue.altref_rate = 25;
   cpi->od_rc.bit_depth = cm->bit_depth;
   cpi->od_rc.quality = oxcf->cq_level;
   cpi->od_rc.alt_rc = &cpi->rc;
