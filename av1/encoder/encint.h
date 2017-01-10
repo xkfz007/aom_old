@@ -101,6 +101,7 @@ struct od_input_queue {
   /* Input queue parameters */
   int keyframe_rate;
   int goldenframe_rate;
+  int altref_rate;
   int frame_delay;
 
   /* Input queue state */
@@ -187,7 +188,6 @@ struct daala_enc_ctx{
   /* Mode of quantization matrice : FLAT (0) or HVS (1) */
   int qm;
   /** Frame delay. */
-  int active_altref;
   int frame_delay;
   /** Displaying order of current frame being encoded. */
   int64_t curr_display_order;

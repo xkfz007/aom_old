@@ -585,10 +585,11 @@ static int od_rc_scale_drop(od_rc_state *rc, int frame_type, int nframes) {
   Note that it ignores end-of-file conditions; one-pass planning *should*
    ignore end-of-file. */
 int od_frame_type(daala_enc_ctx *enc, int64_t coding_frame_count, int *is_golden,
-                  int64_t *ip_count) {
+                  int *is_altref, int64_t *ip_count) {
   int frame_type;
   if (coding_frame_count == 0) {
     *is_golden = 1;
+    *is_altref = 1;
     *ip_count = 0;
     frame_type = OD_I_FRAME;
   }
@@ -622,6 +623,9 @@ int od_frame_type(daala_enc_ctx *enc, int64_t coding_frame_count, int *is_golden
   }
   *is_golden = *ip_count %
    (enc->input_queue.goldenframe_rate/(enc->b_frames + 1)) == 0 &&
+   frame_type != OD_B_FRAME ? 1 : frame_type == OD_I_FRAME;
+  *is_altref = *ip_count %
+   (enc->input_queue.altref_rate/(enc->b_frames + 1)) == 0 &&
    frame_type != OD_B_FRAME ? 1 : frame_type == OD_I_FRAME;
   //fprintf(stderr, "Frametype = %i\n", frame_type);
   return frame_type;
@@ -669,9 +673,10 @@ static int frame_type_count(od_enc_ctx *enc, int nframes[OD_FRAME_NSUBTYPES]) {
   for (i = 0; i < reservoir_frame_delay; i++) {
     int frame_type;
     int is_golden;
+    int is_altref;
     int64_t dummy;
     frame_type =
-     od_frame_type(enc, enc->curr_coding_order + i, &is_golden, &dummy);
+     od_frame_type(enc, enc->curr_coding_order + i, &is_golden, &is_altref, &dummy);
     switch (frame_type) {
       case OD_I_FRAME: {
         for (j=0; j<OD_FRAME_NSUBTYPES; j++) nframes[j] += acc[j];
@@ -720,7 +725,7 @@ static int quality_to_quantizer(int quality, int bit_depth) {
 }
 
 int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
- int is_golden_frame, int frame_type, int *bottom_idx, int *top_idx) {
+ int is_golden_frame, int is_altref_frame, int frame_type, int *bottom_idx, int *top_idx) {
   int frame_subtype;
   int lossy_quantizer_min;
   int lossy_quantizer_max;
@@ -739,14 +744,16 @@ int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
   if (!enc->input_queue.end_of_input) {
     int closed_form_type;
     int closed_form_golden;
+    int closed_form_altref;
     int64_t closed_form_ip_count;
     closed_form_type =
-     od_frame_type(enc, enc->curr_coding_order, &closed_form_golden,
+     od_frame_type(enc, enc->curr_coding_order, &closed_form_golden, &closed_form_altref,
      &closed_form_ip_count);
     //fprintf(stderr, "RC_CLOSED = Type: (%i vs %i), Gold: (%i vs %i), Count: (%li vs %li)\n", frame_type, closed_form_type, is_golden_frame, closed_form_golden, enc->ip_frame_count, closed_form_ip_count);
     OD_UNUSED(closed_form_type);
     OD_ASSERT(closed_form_type == frame_type);
     OD_ASSERT(closed_form_ip_count == enc->ip_frame_count);
+    OD_ASSERT(closed_form_altref == is_altref_frame);
     OD_ASSERT(closed_form_golden == is_golden_frame);
   }
   /*Quantizer selection sticks to the codable, lossy portion of the quantizer

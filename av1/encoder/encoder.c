@@ -2075,8 +2075,8 @@ AV1_COMP *av1_create_compressor(AV1EncoderConfig *oxcf,
   cpi->od_rc.input_queue.keyframe_rate = 250;
   cpi->od_rc.state.info.keyframe_rate = 250;
   cpi->od_rc.input_queue.goldenframe_rate = 10;
+  cpi->od_rc.input_queue.altref_rate = 20;
   cpi->od_rc.frame_delay = 1;
-  cpi->od_rc.active_altref = 0;
   cpi->od_rc.bit_depth = cm->bit_depth;
   cpi->od_rc.quality = oxcf->cq_level;
   cpi->od_rc.alt_rc = &cpi->rc;
@@ -3734,15 +3734,9 @@ static void set_size_dependent_vars(AV1_COMP *cpi, int *q, int *bottom_index,
 
   // Decide q and q bounds.
 #if CONFIG_XIPHRC == 1
-  int frame_type;
-  if (cm->frame_type == KEY_FRAME)
-    frame_type = OD_I_FRAME;
-  else if (cm->frame_type == INTER_FRAME)
-    frame_type = OD_P_FRAME;
-  else if (cpi->od_rc.active_altref)
-    frame_type = OD_B_FRAME;
+  int frame_type = cm->frame_type == KEY_FRAME ? OD_I_FRAME : OD_P_FRAME;
   *q = od_enc_rc_select_quantizers_and_lambdas(&cpi->od_rc, cpi->refresh_golden_frame,
-                                               frame_type,
+                                               cpi->refresh_alt_ref_frame, frame_type,
                                                bottom_index, top_index);
 #else
   *q = av1_rc_pick_q_and_bounds(cpi, bottom_index, top_index);
@@ -4798,13 +4792,8 @@ static void encode_frame_to_data_rate(AV1_COMP *cpi, size_t *size,
   cm->last_frame_type = cm->frame_type;
 
 #if CONFIG_XIPHRC == 1
-  int frame_type;
-  if (cm->frame_type == KEY_FRAME)
-    frame_type = OD_I_FRAME;
-  else if (cm->frame_type == INTER_FRAME)
-    frame_type = OD_P_FRAME;
-  else if (cpi->rc.source_alt_ref_active)
-    frame_type = OD_B_FRAME;
+  int frame_type = cm->frame_type == KEY_FRAME ? OD_I_FRAME : OD_P_FRAME;
+
   od_enc_rc_update_state(&cpi->od_rc, *size << 3,
                          cpi->refresh_golden_frame,
                          frame_type, 0);
@@ -4859,32 +4848,24 @@ static void encode_frame_to_data_rate(AV1_COMP *cpi, size_t *size,
     cm->prev_frame = cm->cur_frame;
 }
 
-int trig = 0;
-
 static void Pass0Encode(AV1_COMP *cpi, size_t *size, uint8_t *dest,
                         unsigned int *frame_flags) {
 #if CONFIG_XIPHRC
   int64_t ip_count;
-  int frame_type, is_golden;
+  int frame_type, is_golden, is_altref;
 
   /* Not updated during init so update it here */
   cpi->od_rc.quality = cpi->oxcf.cq_level;
-  frame_type = od_frame_type(&cpi->od_rc, cpi->od_rc.curr_coding_order, &is_golden, &ip_count);
-
-    cpi->od_rc.active_altref = 0;
+  frame_type = od_frame_type(&cpi->od_rc, cpi->od_rc.curr_coding_order, &is_golden, &is_altref, &ip_count);
 
   if (frame_type == OD_I_FRAME) {
     frame_type = KEY_FRAME;
     cpi->frame_flags &= FRAMEFLAGS_KEY;
   } else if (frame_type == OD_P_FRAME) {
     frame_type = INTER_FRAME;
-  } else if (frame_type == OD_B_FRAME) {
-    cpi->rc.source_alt_ref_active = 1;
-    cpi->od_rc.active_altref = 1;
-    cpi->frame_flags &= FRAMEFLAGS_ALTREF;
   }
 
-   if (!((trig++) % 10)) {
+   if (is_altref) {
        cpi->refresh_alt_ref_frame = 1;
        cpi->rc.source_alt_ref_active = 1;
    }
