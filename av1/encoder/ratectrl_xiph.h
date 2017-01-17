@@ -25,7 +25,7 @@ int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
 
 /* Returns 1 if the frame should be dropped */
 int od_enc_rc_update_state(od_enc_ctx *enc, long bits,
- int is_golden_frame, int frame_type, int droppable);
+ int is_golden_frame, int is_altref_frame, int frame_type, int droppable);
 
 int od_frame_type(daala_enc_ctx *enc, int64_t coding_frame_count, int *is_golden,
                   int *is_altref, int64_t *ip_count);

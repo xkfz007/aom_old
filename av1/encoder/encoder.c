@@ -4571,7 +4571,8 @@ static void encode_frame_to_data_rate(AV1_COMP *cpi, size_t *size,
 #if CONFIG_XIPHRC == 1
       int frame_type = cm->frame_type == INTER_FRAME ? OD_P_FRAME : OD_I_FRAME;
       od_enc_rc_update_state(&cpi->od_rc, *size << 3,
-                             cpi->frame_flags & FRAMEFLAGS_GOLDEN,
+                             cpi->refresh_golden_frame,
+                             cpi->refresh_alt_ref_frame,
                              frame_type, cpi->droppable);
 #else
       av1_rc_postencode_update(cpi, *size);
@@ -4795,6 +4796,7 @@ static void encode_frame_to_data_rate(AV1_COMP *cpi, size_t *size,
 
   od_enc_rc_update_state(&cpi->od_rc, *size << 3,
                          cpi->refresh_golden_frame,
+                         cpi->refresh_alt_ref_frame,
                          frame_type, 0);
   if (frame_type == OD_I_FRAME || frame_type == OD_P_FRAME)
     cpi->od_rc.ip_frame_count++;
