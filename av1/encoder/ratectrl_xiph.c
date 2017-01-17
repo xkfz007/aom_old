@@ -617,11 +617,6 @@ int od_frame_type(daala_enc_ctx *enc, int64_t coding_frame_count, int *is_golden
   TODO: replace with a virtual FIFO that keeps running totals as
    repeating the counting over-and-over will have a performance impact on
    whole-file 2pass usage.*/
-/*We track four frame types/subtypes.
-  I-frames (which are always adjusted by OD_KEY_BOOST_RATIO)
-  normal P-frames (P-frames that are not golden frames and thus not adjusted),
-  golden P-frames (always adjusted by OD_KEY_BOOST_RATIO)
-  B-frames (always adjusted by OD_B_CUT_RATIO)*/
 static int frame_type_count(od_enc_ctx *enc, int nframes[OD_FRAME_NSUBTYPES]) {
   int i;
   int j;
@@ -849,7 +844,7 @@ int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
   else {
     int clamp;
     int reservoir_frames;
-    int nframes[7];
+    int nframes[OD_FRAME_NSUBTYPES];
     int64_t rate_bias;
     int64_t rate_total;
     int base_quantizer;
@@ -909,7 +904,7 @@ int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
       qhi = lossy_quantizer_max;
     base_quantizer = (qlo + qhi) >> 1;
     while (qlo < qhi) {
-      int64_t log_base_quantizer;
+      volatile int64_t log_base_quantizer;
       int64_t diff;
       int64_t bits;
       /*Count bits contributed by each frame type using the model.*/

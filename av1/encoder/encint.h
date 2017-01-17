@@ -33,13 +33,14 @@ typedef struct od_rc_state od_rc_state;
 # define OD_I_FRAME (0)
 # define OD_P_FRAME (1)
 
-# define OD_LAMBDA_SCALE       (2)
-
 /*Frame subtypes that need to be tracked separately by rate control.
   Keep these contiguous with but past the end of the main frame types above.*/
-# define OD_GOLDEN_P_FRAME (3)
-# define OD_ALTREF_P_FRAME (4)
-# define OD_FRAME_NSUBTYPES (5)
+# define OD_GOLDEN_P_FRAME (2)
+# define OD_ALTREF_P_FRAME (3)
+
+# define OD_FRAME_NSUBTYPES (OD_ALTREF_P_FRAME + 1)
+
+# define OD_LAMBDA_SCALE       (2)
 
 /*Constants for frame QP modulation.*/
 # define OD_MQP_I (0.98)
