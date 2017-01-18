@@ -366,7 +366,7 @@ static int64_t od_iir_bessel2_update(od_iir_bessel2 *f, int32_t x) {
 static void od_enc_rc_reset(od_enc_ctx *enc) {
   int64_t npixels;
   int64_t ibpp;
-  enc->rc.bits_per_frame = enc->rc.target_bitrate/enc->state.info.framerate;
+  enc->rc.bits_per_frame = (int64_t)(enc->rc.target_bitrate/enc->state.info.framerate);
   /*Insane framerates or frame sizes mean insane bitrates.
     Let's not get carried away.*/
   if(enc->rc.bits_per_frame > 0x400000000000LL) {
@@ -420,6 +420,8 @@ static void od_enc_rc_reset(od_enc_ctx *enc) {
     the scale and exp values in OD_GOLDEN_P_FRAME.*/
   enc->rc.exp[OD_GOLDEN_P_FRAME] = enc->rc.exp[OD_P_FRAME];
   enc->rc.log_scale[OD_GOLDEN_P_FRAME] = enc->rc.log_scale[OD_P_FRAME];
+  enc->rc.exp[OD_ALTREF_P_FRAME] = enc->rc.exp[OD_P_FRAME];
+  enc->rc.log_scale[OD_ALTREF_P_FRAME] = enc->rc.log_scale[OD_P_FRAME];
   /*We clamp the actual I and B frame delays to a minimum of 10 to work within
      the range of values where later incrementing the delay works as designed.
     10 is not an exact choice, but rather a good working trade-off.*/
@@ -464,7 +466,7 @@ int od_enc_rc_resize(od_enc_ctx *enc) {
     int idt;
     /*Otherwise, update the bounds on the buffer, but not the current
        fullness.*/
-    enc->rc.bits_per_frame = enc->rc.target_bitrate/enc->state.info.framerate;
+    enc->rc.bits_per_frame = (int64_t)(enc->rc.target_bitrate/enc->state.info.framerate);
     /*Insane framerates or frame sizes mean insane bitrates.
       Let's not get carried away.*/
     if (enc->rc.bits_per_frame > 0x400000000000LL) {
