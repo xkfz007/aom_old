@@ -498,7 +498,7 @@ int od_enc_rc_resize(od_enc_ctx *enc) {
   return OD_SUCCESS;
 }
 
-int od_enc_rc_init(od_enc_ctx *enc, long bitrate) {
+int od_enc_rc_init(od_enc_ctx *enc, long bitrate, int delay_ms) {
   od_rc_state *rc;
   if(enc->state.info.framerate <= 0)
     return OD_EINVAL;
@@ -523,9 +523,7 @@ int od_enc_rc_init(od_enc_ctx *enc, long bitrate) {
        errors in the worst case.
       The 256 frame maximum means we'll require 8-10 seconds of pre-buffering
       at 24-30 fps, which is not unreasonable.*/
-    rc->reservoir_frame_delay = enc->state.info.keyframe_rate*1.5 > 256 ? 256 :
-     enc->state.info.keyframe_rate*1.5;
-    /*By default, enforce hard buffer constraints.*/
+    rc->reservoir_frame_delay = OD_MINI((delay_ms / 1000)*enc->state.info.framerate, 256);
     rc->drop_frames=1;
     rc->cap_overflow=1;
     rc->cap_underflow=0;
@@ -663,8 +661,10 @@ static int frame_type_count(od_enc_ctx *enc, int nframes[OD_FRAME_NSUBTYPES]) {
         if (is_golden) {
           ++acc[OD_GOLDEN_P_FRAME];
           ++count;
-        }
-        else {
+        } else if (is_altref) {
+          ++acc[OD_ALTREF_P_FRAME];
+          ++count;
+        } else {
           ++acc[OD_P_FRAME];
           ++count;
         }

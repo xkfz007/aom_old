@@ -18,7 +18,7 @@
 
 #define OD_N_CODED_QUANTIZERS QINDEX_RANGE
 
-int od_enc_rc_init(od_enc_ctx *enc, long bitrate);
+int od_enc_rc_init(od_enc_ctx *enc, long bitrate, int delay_ms);
 
 int od_enc_rc_select_quantizers_and_lambdas(od_enc_ctx *enc,
  int is_golden_frame, int is_altref_frame, int frame_type, int *bottom_idx, int *top_idx);
