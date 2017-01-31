@@ -5421,7 +5421,17 @@ int av1_get_compressed_data(AV1_COMP *cpi, unsigned int *frame_flags,
   } else {
     *size = 0;
     if (flush && oxcf->pass == 1 && !cpi->twopass.first_pass_done) {
+#ifdef CONFIG_XIPHRC
+      uint8_t buf[128], *dst = buf;
+      struct aom_codec_cx_pkt pkt;
+      od_enc_rc_2pass_out(&cpi->od_rc, &dst);
+      pkt.kind = AOM_CODEC_STATS_PKT;
+      pkt.data.twopass_stats.buf = dst;
+      pkt.data.twopass_stats.sz = cpi->od_rc.rc.twopass_buffer_bytes;
+      aom_codec_pkt_list_add(cpi->output_pkt_list, &pkt);
+#else
       av1_end_first_pass(cpi); /* get last stats packet */
+#endif
       cpi->twopass.first_pass_done = 1;
     }
     return -1;
