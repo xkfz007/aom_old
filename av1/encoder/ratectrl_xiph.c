@@ -1206,25 +1206,265 @@ int od_enc_rc_update_state(od_enc_ctx *enc, long bits,
   return dropped;
 }
 
-int od_enc_rc_2pass_out(od_enc_ctx *enc, unsigned char **buf) {
-  OD_UNUSED(enc);
-  OD_UNUSED(buf);
-  if (enc->rc.target_bitrate <= 0 ||
-   (enc->state.cur_time >=0 && enc->rc.twopass_state != 1)) {
-    return OD_EINVAL;
+static void od_rc_buffer_val(od_rc_state *rc,int64_t val,int bytes){
+  while(bytes-->0){
+    rc->twopass_buffer[rc->twopass_buffer_bytes++]=(unsigned char)(val&0xFF);
+    val>>=8;
   }
-  /* Stub to establish API */
-  return OD_EIMPL;
+}
+
+int od_enc_rc_2pass_out(od_enc_ctx *enc, unsigned char **buf) {
+  if(enc->rc.twopass_buffer_bytes==0){
+    if(enc->rc.twopass_state==0){
+      int qi;
+      /*Pick first-pass qi for scale calculations.*/
+      int top, bot;
+      qi=od_enc_rc_select_quantizers_and_lambdas(enc,1,1,OD_I_FRAME,&top,&bot);
+      enc->state.nqis=1;
+      enc->state.qis[0]=qi;
+      enc->rc.twopass_state=1;
+      enc->rc.frame_count[0]=enc->rc.frame_count[1]=enc->rc.frame_count[2]=0;
+      enc->rc.scale_sum[0]=enc->rc.scale_sum[1]=0;
+      /*Fill in dummy summary values.*/
+      od_rc_buffer_val(&enc->rc,OD_RC_2PASS_MAGIC,4);
+      od_rc_buffer_val(&enc->rc,OD_RC_2PASS_VERSION,4);
+      od_rc_buffer_val(&enc->rc,0,OD_RC_2PASS_HDR_SZ-8);
+    } else {
+      int qti;
+      qti=enc->rc.cur_metrics.frame_type;
+      enc->rc.scale_sum[qti]+=od_bexp64_q24(enc->rc.cur_metrics.log_scale);
+      enc->rc.frame_count[qti]++;
+      enc->rc.frame_count[2]+=enc->rc.cur_metrics.dup_count;
+      od_rc_buffer_val(&enc->rc,enc->rc.cur_metrics.dup_count|enc->rc.cur_metrics.frame_type<<31,4);
+      od_rc_buffer_val(&enc->rc,enc->rc.cur_metrics.log_scale,4);
+      od_rc_buffer_val(&enc->rc,enc->rc.cur_metrics.activity_avg,4);
+    }
+  }
+  else if(enc->packet_state==OD_PACKET_DONE&&
+    enc->rc.twopass_buffer_bytes!=OD_RC_2PASS_HDR_SZ){
+    enc->rc.twopass_buffer_bytes=0;
+    od_rc_buffer_val(&enc->rc,OD_RC_2PASS_MAGIC,4);
+    od_rc_buffer_val(&enc->rc,OD_RC_2PASS_VERSION,4);
+    od_rc_buffer_val(&enc->rc,enc->rc.frame_count[0],4);
+    od_rc_buffer_val(&enc->rc,enc->rc.frame_count[1],4);
+    od_rc_buffer_val(&enc->rc,enc->rc.frame_count[2],4);
+    od_rc_buffer_val(&enc->rc,enc->rc.exp[0],1);
+    od_rc_buffer_val(&enc->rc,enc->rc.exp[1],1);
+    od_rc_buffer_val(&enc->rc,enc->rc.scale_sum[0],8);
+    od_rc_buffer_val(&enc->rc,enc->rc.scale_sum[1],8);
+  }
+  else{
+    /*The data for this frame has already been retrieved.*/
+    *buf=NULL;
+    return 0;
+  }
+  *buf=enc->rc.twopass_buffer;
+  return enc->rc.twopass_buffer_bytes;
+}
+
+static size_t od_rc_buffer_fill(od_rc_state *rc,unsigned char *buf,size_t bytes,size_t consumed,size_t goal){
+  while(rc->twopass_buffer_fill < goal && consumed < bytes)
+    rc->twopass_buffer[rc->twopass_buffer_fill++] = buf[consumed++];
+  return consumed;
+}
+
+static int64_t od_rc_unbuffer_val(od_rc_state *rc, int bytes){
+  int64_t ret;
+  int     shift;
+  ret=0;
+  shift=0;
+  while(bytes-->0){
+    ret|=((int64_t)rc->twopass_buffer[rc->twopass_buffer_bytes++])<<shift;
+    shift+=8;
+  }
+  return ret;
 }
 
 int od_enc_rc_2pass_in(od_enc_ctx *enc, unsigned char *buf, size_t bytes) {
-  OD_UNUSED(enc);
-  OD_UNUSED(buf);
-  OD_UNUSED(bytes);
-  if(enc->rc.target_bitrate <=0 ||
-   (enc->state.cur_time >= 0 && enc->rc.twopass_state != 2)) {
-    return OD_EINVAL;
+  size_t consumed;
+  consumed=0;
+  /*Enable pass 2 mode if this is the first call.*/
+  if(enc->rc.twopass_state==0){
+    enc->rc.twopass_state=2;
+    enc->rc.twopass_buffer_fill=0;
+    enc->rc.frame_count[0]=0;
+    enc->rc.nframe_metrics=0;
+    enc->rc.cframe_metrics=0;
+    enc->rc.frame_metrics_head=0;
+    enc->rc.scale_window0=0;
+    enc->rc.scale_window_end=0;
   }
-  /* Stub to establish API */
-  return OD_EIMPL;
+  /*If we haven't got a valid summary header yet, try to parse one.*/
+  if(enc->rc.frame_count[0]==0){
+    if(!buf){
+      int frames_needed;
+      /*If we're using a whole-file buffer, we just need the first frame.
+        Otherwise, we may need as many as one per buffer slot.*/
+      frames_needed=enc->rc.frame_metrics==NULL?1:enc->rc.reservoir_frame_delay;
+      return OD_RC_2PASS_HDR_SZ+frames_needed*OD_RC_2PASS_PACKET_SZ-enc->rc.twopass_buffer_fill;
+    }
+    consumed=od_rc_buffer_fill(&enc->rc,buf,bytes,consumed,OD_RC_2PASS_HDR_SZ);
+    if(enc->rc.twopass_buffer_fill>=OD_RC_2PASS_HDR_SZ){
+      int64_t     scale_sum[2];
+      int         exp[2];
+      int         reservoir_frame_delay;
+      /*Read the summary header data.*/
+      /*Check the magic value and version number.*/
+      if(od_rc_unbuffer_val(&enc->rc,4)!=OD_RC_2PASS_MAGIC||
+       od_rc_unbuffer_val(&enc->rc,4)!=OD_RC_2PASS_VERSION){
+        enc->rc.twopass_buffer_bytes=0;
+        return OD_EINVAL;
+      }
+      enc->rc.frame_count[0]=(uint32_t)od_rc_unbuffer_val(&enc->rc,4);
+      enc->rc.frame_count[1]=(uint32_t)od_rc_unbuffer_val(&enc->rc,4);
+      enc->rc.frame_count[2]=(uint32_t)od_rc_unbuffer_val(&enc->rc,4);
+      exp[0]=(int)od_rc_unbuffer_val(&enc->rc,1);
+      exp[1]=(int)od_rc_unbuffer_val(&enc->rc,1);
+      scale_sum[0]=od_rc_unbuffer_val(&enc->rc,8);
+      scale_sum[1]=od_rc_unbuffer_val(&enc->rc,8);
+      /*Make sure the file claims to have at least one frame.
+        Otherwise we probably got the placeholder data from an aborted pass 1.
+        Also make sure the total frame count doesn't overflow an integer.*/
+      reservoir_frame_delay=enc->rc.frame_count[0]+enc->rc.frame_count[1]+enc->rc.frame_count[2];
+      if(enc->rc.frame_count[0]==0||reservoir_frame_delay<0||
+       (uint32_t)reservoir_frame_delay<enc->rc.frame_count[0]||
+       (uint32_t)reservoir_frame_delay<enc->rc.frame_count[1]){
+        enc->rc.frame_count[0]=0;
+        enc->rc.twopass_buffer_bytes=0;
+        return OD_EINVAL;
+      }
+      /*Got a valid header; set up pass 2.*/
+      enc->rc.frames_left[0]=enc->rc.frame_count[0];
+      enc->rc.frames_left[1]=enc->rc.frame_count[1];
+      enc->rc.frames_left[2]=enc->rc.frame_count[2];
+      /*If the user hasn't specified a buffer size, use the whole file.*/
+      if(enc->rc.frame_metrics==NULL){
+        enc->rc.reservoir_frame_delay=reservoir_frame_delay;
+        enc->rc.nframes[0]=enc->rc.frame_count[0];
+        enc->rc.nframes[1]=enc->rc.frame_count[1];
+        enc->rc.nframes[2]=enc->rc.frame_count[2];
+        enc->rc.scale_sum[0]=scale_sum[0];
+        enc->rc.scale_sum[1]=scale_sum[1];
+        enc->rc.scale_window_end=reservoir_frame_delay;
+        od_enc_rc_reset(enc);
+      }
+      enc->rc.exp[0]=exp[0];
+      enc->rc.exp[1]=exp[1];
+      /*Clear the header data from the buffer to make room for packet data.*/
+      enc->rc.twopass_buffer_fill=0;
+      enc->rc.twopass_buffer_bytes=0;
+    }
+  }
+  if(enc->rc.frame_count[0]!=0){
+    int64_t     curframe_num;
+    int         nframe_count;
+    curframe_num=enc->ip_frame_count;
+    if(curframe_num>=0){
+      /*We just encoded a frame; make sure things matched.*/
+      if(enc->rc.prev_metrics.dup_count!=enc->prev_dup_count){
+        enc->rc.twopass_buffer_bytes=0;
+        return OD_EINVAL;
+      }
+    }
+    curframe_num+=enc->prev_dup_count+1;
+    nframe_count=enc->rc.frame_count[0]+enc->rc.frame_count[1]+enc->rc.frame_count[2];
+    if(curframe_num>=nframe_count){
+      /*We don't want any more data after the last frame, and we don't want to
+         allow any more frames to be encoded.*/
+      enc->rc.twopass_buffer_bytes=0;
+    }
+    else if(enc->rc.twopass_buffer_bytes==0){
+      if(enc->rc.frame_metrics==NULL){
+        /*We're using a whole-file buffer:*/
+        if(!buf)return OD_RC_2PASS_PACKET_SZ-enc->rc.twopass_buffer_fill;
+        consumed=od_rc_buffer_fill(&enc->rc,buf,bytes,consumed,OD_RC_2PASS_PACKET_SZ);
+        if(enc->rc.twopass_buffer_fill>=OD_RC_2PASS_PACKET_SZ){
+          uint32_t dup_count;
+          int32_t  log_scale;
+          unsigned     activity;
+          int          qti;
+          int          arg;
+          /*Read the metrics for the next frame.*/
+          dup_count=od_rc_unbuffer_val(&enc->rc,4);
+          log_scale=od_rc_unbuffer_val(&enc->rc,4);
+          activity=od_rc_unbuffer_val(&enc->rc,4);
+          enc->rc.cur_metrics.log_scale=log_scale;
+          qti=(dup_count&0x80000000)>>31;
+          enc->rc.cur_metrics.dup_count=dup_count&0x7FFFFFFF;
+          enc->rc.cur_metrics.frame_type=qti;
+          enc->rc.twopass_force_kf=qti==OD_I_FRAME;
+          enc->activity_avg=enc->rc.cur_metrics.activity_avg=activity;
+          /*"Helpfully" set the dup count back to what it was in pass 1.*/
+          arg=enc->rc.cur_metrics.dup_count;
+          //th_encode_ctl(_enc,TH_ENCCTL_SET_DUP_COUNT,&arg,sizeof(arg));
+          /*Clear the buffer for the next frame.*/
+          enc->rc.twopass_buffer_fill=0;
+        }
+      }
+      else{
+        int frames_needed;
+        /*We're using a finite buffer:*/
+        frames_needed=OD_MINI(enc->rc.reservoir_frame_delay-OD_MINI(enc->rc.reservoir_frame_delay,
+         enc->rc.scale_window_end-enc->rc.scale_window0),enc->rc.frames_left[0]+enc->rc.frames_left[1]-enc->rc.nframes[0]-enc->rc.nframes[1]);
+        while(frames_needed>0){
+          if(!buf){
+            return OD_RC_2PASS_PACKET_SZ*frames_needed-enc->rc.twopass_buffer_fill;
+          }
+          consumed=od_rc_buffer_fill(&enc->rc,buf,bytes,consumed,OD_RC_2PASS_PACKET_SZ);
+          if(enc->rc.twopass_buffer_fill>=OD_RC_2PASS_PACKET_SZ){
+            od_frame_metrics *m;
+            int               fmi;
+            uint32_t      dup_count;
+            int32_t       log_scale;
+            int               qti;
+            unsigned          activity;
+            /*Read the metrics for the next frame.*/
+            dup_count=od_rc_unbuffer_val(&enc->rc,4);
+            log_scale=od_rc_unbuffer_val(&enc->rc,4);
+            activity=od_rc_unbuffer_val(&enc->rc,4);
+            /*Add the to the circular buffer.*/
+            fmi=enc->rc.frame_metrics_head+enc->rc.nframe_metrics++;
+            if(fmi>=enc->rc.cframe_metrics)fmi-=enc->rc.cframe_metrics;
+            m=enc->rc.frame_metrics+fmi;
+            m->log_scale=log_scale;
+            qti=(dup_count&0x80000000)>>31;
+            m->dup_count=dup_count&0x7FFFFFFF;
+            m->frame_type=qti;
+            m->activity_avg=activity;
+            /*And accumulate the statistics over the window.*/
+            enc->rc.nframes[qti]++;
+            enc->rc.nframes[2]+=m->dup_count;
+            enc->rc.scale_sum[qti]+=od_bexp64_q24(m->log_scale);
+            enc->rc.scale_window_end+=m->dup_count+1;
+            /*Compute an upper bound on the number of remaining packets needed
+               for the current window.*/
+            frames_needed=OD_MINI(enc->rc.reservoir_frame_delay-OD_MINI(enc->rc.reservoir_frame_delay,
+             enc->rc.scale_window_end-enc->rc.scale_window0),
+             enc->rc.frames_left[0]+enc->rc.frames_left[1]
+             -enc->rc.nframes[0]-enc->rc.nframes[1]);
+            /*Clear the buffer for the next frame.*/
+            enc->rc.twopass_buffer_fill=0;
+            enc->rc.twopass_buffer_bytes=0;
+          }
+          /*Go back for more data.*/
+          else break;
+        }
+        /*If we've got all the frames we need, fill in the current metrics.
+          We're ready to go.*/
+        if(frames_needed<=0){
+          int arg;
+          *&enc->rc.cur_metrics=
+           *(enc->rc.frame_metrics+enc->rc.frame_metrics_head);
+          enc->rc.twopass_force_kf=enc->rc.cur_metrics.frame_type==OD_I_FRAME;
+          enc->activity_avg=enc->rc.cur_metrics.activity_avg;
+          /*"Helpfully" set the dup count back to what it was in pass 1.*/
+          arg=enc->rc.cur_metrics.dup_count;
+          //th_encode_ctl(_enc,TH_ENCCTL_SET_DUP_COUNT,&arg,sizeof(arg));
+          /*Mark us ready for the next frame.*/
+          enc->rc.twopass_buffer_bytes=1;
+        }
+      }
+    }
+  }
+  return (int)consumed;
 }

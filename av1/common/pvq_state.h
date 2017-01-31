@@ -97,6 +97,9 @@ struct od_state {
   /* Quantization matrices and their inverses. */
   int16_t qm[OD_QM_BUFFER_SIZE];
   int16_t qm_inv[OD_QM_BUFFER_SIZE];
+
+  int qis[10];
+  int nqis;
 };
 
 void od_adapt_ctx_reset(od_adapt_ctx *state, int is_keyframe);

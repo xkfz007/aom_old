@@ -33,6 +33,12 @@ typedef struct od_rc_state od_rc_state;
 # define OD_I_FRAME (0)
 # define OD_P_FRAME (1)
 
+#define OD_RC_2PASS_MAGIC (0x9032544F)
+#define OD_RC_2PASS_HDR_SZ (38)
+#define OD_RC_2PASS_PACKET_SZ (12)
+#define OD_PACKET_DONE (INT_MAX)
+#define OD_RC_2PASS_VERSION (1)
+
 /*Frame subtypes that need to be tracked separately by rate control.
   Keep these contiguous with but past the end of the main frame types above.*/
 # define OD_GOLDEN_P_FRAME (2)
@@ -111,6 +117,18 @@ struct od_input_queue {
   int closed_gop;
 };
 
+/*The 2-pass metrics associated with a single frame.*/
+typedef struct od_frame_metrics{
+  /*The log base 2 of the scale factor for this frame in Q24 format.*/
+  int   log_scale;
+  /*The number of application-requested duplicates of this frame.*/
+  unsigned      dup_count:31;
+  /*The frame type from pass 1.*/
+  unsigned      frame_type:1;
+  /*The frame activity average from pass 1.*/
+  unsigned      activity_avg;
+} od_frame_metrics;
+
 /*Rate control setup and working state information.*/
 struct od_rc_state {
   /*The target bit-rate in bits per second.*/
@@ -130,7 +148,22 @@ struct od_rc_state {
     0 => 1-pass encoding.
     1 => 1st pass of 2-pass encoding.
     2 => 2nd pass of 2-pass encoding.*/
+  int twopass_force_kf;
   int twopass_state;
+  uint8_t twopass_buffer[128];
+  int twopass_buffer_bytes;
+  int64_t scale_sum[OD_FRAME_NSUBTYPES];
+  int frames_left[OD_FRAME_NSUBTYPES];
+  od_frame_metrics prev_metrics;
+  od_frame_metrics cur_metrics;
+  od_frame_metrics *frame_metrics;
+  int twopass_buffer_fill;
+  int nframe_metrics;
+  int nframes[OD_FRAME_NSUBTYPES];
+  int cframe_metrics;
+  int frame_metrics_head;
+  int scale_window0;
+  int scale_window_end;
   /*The log of the number of pixels in a frame in Q57 format.*/
   int64_t log_npixels;
   /*The target average bits per frame.*/
@@ -169,6 +202,9 @@ struct daala_enc_ctx{
   int quality;
   int target_quantizer;
   int b_frames;
+  int packet_state;
+  int prev_dup_count;
+  int activity_avg;
   /*Motion estimation RDO lambda.*/
   int mv_rdo_lambda;
   /*The deringing filter RDO lambda.*/
