@@ -641,7 +641,9 @@ static int convert_to_ac_quant(int q, int bit_depth) {
   return lrint(av1_convert_qindex_to_q(q, bit_depth));
 }
 
-int od_enc_rc_select_quantizers_and_lambdas(od_rc_state *rc,
+double pb = 0.0f;
+
+int od_enc_rc_select_quantizers_and_lambdas(od_rc_state *rc, void *alt_rc,
                                             int is_golden_frame,
                                             int is_altref_frame, int frame_type,
                                             int *bottom_idx, int *top_idx) {
@@ -724,15 +726,16 @@ int od_enc_rc_select_quantizers_and_lambdas(od_rc_state *rc,
         rc->base_quantizer = convert_to_ac_quant(rc->quality, rc->bit_depth);
       }
 
-      if (rc->periodic_boosts && !is_golden_frame) {
-        int pattern_rate = (rc->goldenframe_rate >> 1);
-        int dist_to_golden = rc->cur_frame % pattern_rate;
-        int dist_away_golden = pattern_rate - dist_to_golden;
-        int boost = dist_to_golden;
-        if (dist_away_golden > dist_to_golden) boost = dist_away_golden;
-        boost -= pattern_rate;
-        boost *= (rc->base_quantizer) / OD_PERIODIC_BOOST_DIV;
-        rc->base_quantizer = rc->base_quantizer + boost;
+      if (rc->periodic_boosts) {
+        const double delta_rate[] = { 0.50, 1.0, 0.85, 1.0, 0.70, 1.0, 0.85, 1.0,
+                                      0.50, 1.0, 0.85, 1.0, 0.70, 1.0, 0.85, 1.0,
+                                      0.50, 1.0, 0.85, 1.0, 0.70, 1.0, 0.85, 1.0, 0.50 };
+        const int delta_qindex = av1_compute_qdelta(alt_rc, rc->base_quantizer,
+                                                    rc->base_quantizer * delta_rate[rc->cur_frame % rc->goldenframe_rate], rc->goldenframe_rate);
+        double nb = ((delta_qindex*0.5f + pb)/2.0f) - pb*0.8;
+        nb *= OD_PERIODIC_BOOST_STRENGTH;
+        pb = nb;
+        rc->base_quantizer += lrint(nb);
       }
 
       /*As originally written, qp modulation is applied to the coded quantizer.

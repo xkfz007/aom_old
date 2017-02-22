@@ -3871,7 +3871,7 @@ static void set_size_dependent_vars(AV1_COMP *cpi, int *q, int *bottom_index,
 #if CONFIG_XIPHRC
   int frame_type = cm->frame_type == KEY_FRAME ? OD_I_FRAME : OD_P_FRAME;
   *q = od_enc_rc_select_quantizers_and_lambdas(
-      &cpi->od_rc, cpi->refresh_golden_frame, cpi->refresh_alt_ref_frame,
+      &cpi->od_rc, &cpi->rc, cpi->refresh_golden_frame, cpi->refresh_alt_ref_frame,
       frame_type, bottom_index, top_index);
 #else
   *q = av1_rc_pick_q_and_bounds(cpi, bottom_index, top_index);
