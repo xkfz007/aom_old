@@ -2173,7 +2173,7 @@ AV1_COMP *av1_create_compressor(AV1EncoderConfig *oxcf,
   cpi->od_rc.frame_height = cm->render_height;
   cpi->od_rc.keyframe_rate = oxcf->key_freq;
   cpi->od_rc.goldenframe_rate = FIXED_GF_INTERVAL;
-  cpi->od_rc.altref_rate = 25;
+  cpi->od_rc.altref_rate = 4;
   cpi->od_rc.bit_depth = cm->bit_depth;
   cpi->od_rc.minq = oxcf->best_allowed_q;
   cpi->od_rc.maxq = oxcf->worst_allowed_q;
