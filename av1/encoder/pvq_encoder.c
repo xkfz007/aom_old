@@ -67,6 +67,66 @@ static void od_fill_dynamic_rsqrt_table(double *table, const int table_size,
     table[i] = od_rsqrt_table((int)(start + 2*i + 1));
 }
 
+#if CONFIG_FFOPUS_PVQ_SEARCH
+#define pvq_search_rdo_double ffopus_pvq_search
+#else
+#define pvq_search_rdo_double pvq_search_rdo_double_c
+#endif
+
+#define FFABS(x) (x < 0 ? -x : x)
+#define FFSIGN(x) (x < 0 ? -1 : 1)
+
+static double ffopus_pvq_search(od_val16 *X, int N, int K, int *y, double g2, double pvq_norm_lambda, int prev_k)
+{
+    int i;
+    double res = 0.0f, y_norm = 0.0f, xy_norm = 0.0f;
+    int xx_norm = 0;
+
+    for (i = 0; i < N; i++) {
+        res += FFABS(X[i]);
+        xx_norm += X[i]*X[i];
+    }
+
+    res = K/(res + __DBL_EPSILON__);
+
+    for (i = 0; i < N; i++) {
+        y[i] = lrint(res*X[i]);
+        y_norm  += y[i]*y[i];
+        xy_norm += y[i]*X[i];
+        K -= FFABS(y[i]);
+    }
+
+    while (K) {
+        int max_idx = 0, phase = FFSIGN(K);
+        double max_den = 1.0f, max_num = 0.0f;
+        y_norm += 1.0f;
+
+        for (i = 0; i < N; i++) {
+            /* If the sum has been overshot and the best place has 0 pulses allocated
+             * to it, attempting to decrease it further will actually increase the
+             * sum. Prevent this by disregarding any 0 positions when decrementing. */
+            const int ca = 1 ^ ((y[i] == 0) & (phase < 0));
+            double xy_new = xy_norm + 1*phase*FFABS(X[i]);
+            double y_new  = y_norm  + 2*phase*FFABS(y[i]);
+            xy_new = xy_new * xy_new;
+            if (ca && (max_den*xy_new) > (y_new*max_num)) {
+                max_den = y_new;
+                max_num = xy_new;
+                max_idx = i;
+            }
+        }
+
+        K -= phase;
+
+        phase *= FFSIGN(X[max_idx]);
+        xy_norm += 1*phase*X[max_idx];
+        y_norm  += 2*phase*y[max_idx];
+        y[max_idx] += phase;
+    }
+
+    return xy_norm/(1e-100 + sqrt(xx_norm*y_norm));
+}
+
 /** Find the codepoint on the given PSphere closest to the desired
  * vector. Double-precision PVQ search just to make sure our tests
  * aren't limited by numerical accuracy.
