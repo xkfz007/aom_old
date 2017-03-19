@@ -193,7 +193,7 @@ double pvq_search_rdo_double_c(const od_val16 *xcoeff, int n, int k,
   /* Only use RDO on the last few pulses. This not only saves CPU, but using
      RDO on all pulses actually makes the results worse for reasons I don't
      fully understand. */
-  rdo_pulses = 0;
+  rdo_pulses = k;
   /* Rough assumption for now, the last position costs about 3 bits more than
      the first. */
   delta_rate = 3./n;
