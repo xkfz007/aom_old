@@ -199,6 +199,8 @@ void od_fatal_impl(const char *_str, const char *_file, int _line);
 /** Silence unused parameter/variable warnings */
 # define OD_UNUSED(expr) (void)(expr)
 
+#define OD_FLOAT_PVQ
+
 #if defined(OD_FLOAT_PVQ)
 typedef double od_val16;
 typedef double od_val32;
